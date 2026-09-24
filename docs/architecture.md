@@ -42,17 +42,18 @@ The Desktop distribution bundles its main-process and preload logic inside an El
 - **Linux**: `/opt/Antigravity/resources/app.asar`
 
 ### Execution Steps:
-1. **Backup Verification**: Creates `app.asar.bak` if not present. If a backup already exists, it is restored first to ensure clean state.
-2. **ASAR Extraction**: Unpacks `app.asar` into a temporary directory using `@electron/asar`.
-3. **Anchor Injection in `dist/utils.js`**:
-   The patcher looks for the application's URL load anchor:
+1. **Pre-flight Conflict Resolution**: Scans global NPM packages (`cleanupConflictingGlobalPackages`) and uninstalls any conflicting packages (like legacy `antigravity-rtl`).
+2. **Backup Verification**: Creates `app.asar.bak` if not present. If a backup already exists, it is restored first to ensure clean state.
+3. **ASAR Extraction**: Unpacks `app.asar` into a temporary directory using `@electron/asar`.
+4. **Anchor Cleaning & Injection in `dist/utils.js`**:
+   The patcher scans `dist/utils.js` and purges ANY previous RTL patches (original `/* ANTIGRAVITY RTL PATCH */`, older RZ blocks, or third-party hooks) via `purgePreviousRtlPatchesFromUtils`, ensuring a clean baseline. It then locates the URL load anchor:
    ```javascript
    void win.loadURL(url);
    ```
-   It replaces this statement with `bin/payload.js`.
-4. **DevTools Activation**: Replaces `devTools: !app.isPackaged` with `devTools: true` to enable developer inspect tools.
-5. **Asset Injection**: Copies `Vazirmatn-Variable.woff2` and the `bin/fonts/` tree into `dist/fonts/`.
-6. **ASAR Repack**: Reconstructs `app.asar` atomically and removes the temporary extraction directory.
+   and replaces it with `bin/payload.js`.
+5. **DevTools Activation**: Replaces `devTools: !app.isPackaged` with `devTools: true` to enable developer inspect tools.
+6. **Asset Injection**: Copies `Vazirmatn-Variable.woff2` and the `bin/fonts/` tree into `dist/fonts/`.
+7. **ASAR Repack**: Reconstructs `app.asar` atomically and removes the temporary extraction directory.
 
 ---
 
@@ -64,16 +65,19 @@ Antigravity IDE runs a VS Code architecture. The workbench files reside in:
 
 ### Execution Steps:
 1. **Backups**: Creates `.original.bak` backups for both HTML entrypoints.
-2. **Payload & Font Placement**:
+2. **Legacy File & Tag Removal**:
+   - Removes obsolete files from previous RTL tools (`payload.js`, `rtl.js`, `rtl.css`).
+   - Purges any previous RTL script/link tags and comments from all workbench HTML files.
+3. **Payload & Font Placement**:
    - Copies `bin/ide-payload.js` directly into `workbench/ide-payload.js`.
    - Recursively copies `bin/fonts/` into `workbench/fonts/`.
    - Copies `Vazirmatn-Variable.woff2` into `workbench/`.
-3. **Content Security Policy (CSP) Bypass**:
+4. **Content Security Policy (CSP) Bypass**:
    VS Code enforces strict CSP rules that block inline scripts, local fonts, and untrusted DOM mutations:
    - Removes `require-trusted-types-for` and `trusted-types` directives.
    - Appends `data:` and `'self'` to the `font-src` directive.
    - Appends `'unsafe-inline'` to the `script-src` directive.
-4. **Script Tag Injection**:
+5. **Script Tag Injection**:
    Injects:
    ```html
    <!-- RZ ANTIGRAVITY RTL -->

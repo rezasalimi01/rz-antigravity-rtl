@@ -760,6 +760,13 @@ win.webContents.on('dom-ready', () => {
                 }
             }, { capture: true });
 
+            // Clean up any legacy or duplicate RTL widget/panels from previous patches
+            const legacyWidgets = document.querySelectorAll('#rtl-settings-wrapper, #rtl-toggle-btn, .rtl-widget-container');
+            legacyWidgets.forEach(el => {
+                const container = el.closest('.rtl-widget-container') || el.closest('.fixed') || el;
+                if (container && container.parentNode) container.parentNode.removeChild(container);
+            });
+
             // 3. Create Floating Widget
             const widgetWrapper = document.createElement('div');
             widgetWrapper.innerHTML = \`

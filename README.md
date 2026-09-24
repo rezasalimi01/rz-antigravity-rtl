@@ -27,6 +27,7 @@ This CLI tool automatically injects a sophisticated RTL engine into Antigravity 
 - **Smart Auto-Direction**: Automatically detects if a paragraph begins with RTL or LTR characters and aligns it accordingly.
 - **Force RTL Mode**: Toggle switch to force all chat output to align to the right regardless of character detection.
 - **Persian Keyboard Fix**: Maps `Shift + 2` to type `@` instead of `٬` on Persian keyboards.
+- **Auto-Cleanup & Zero Conflicts**: Automatically detects and purges any previous or third-party RTL patches (including original `antigravity-rtl` patches, old global packages, and legacy files) to guarantee clean, collision-free operation.
 - **Safe Backups & Restore**: Automatic backups created prior to patching, with an instant `--restore` command.
 
 ---
@@ -136,6 +137,7 @@ Special thanks to **Mohammad Mehdi Naderi** for the initial concept and foundati
 - **راست‌چین هوشمند (Smart Auto-Direction)**: سیستم به صورت خودکار تشخیص می‌دهد که هر پیام با حرف فارسی شروع شده یا انگلیسی و جهت آن را تنظیم می‌کند.
 - **حالت راست‌چینِ اجباری (Force RTL Mode)**: قابلیت سوئیچ برای راست‌چین کردن تمام پیام‌های چت.
 - **اصلاح کیبورد فارسی**: رفع مشکل کلید `Shift + 2` برای تایپ علامت `@` به جای «٬».
+- **پاکسازی خودکار و عدم تداخل (Auto-Cleanup & Zero Conflicts)**: شناسایی و پاکسازی خودکار هرگونه پچ قبلی (مانند سورس اصلی antigravity-rtl، پکیج‌های منسوخ گلوبال و فایل‌های قدیمی) قبل از نصب پچ جدید جهت جلوگیری از هرگونه تداخل.
 - **بازگردانی امن (Restore)**: تهیه بک‌آپ خودکار و بازگردانی سریع به حالت پیش‌فرض با فلگ `--restore`.
 
 ## 🚀 نحوهٔ استفاده

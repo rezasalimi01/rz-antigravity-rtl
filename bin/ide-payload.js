@@ -920,6 +920,15 @@
     }
 
     function createWidget() {
+        // Remove legacy widgets from older versions or other tools if present
+        const legacyWidgets = document.querySelectorAll('#rtl-settings-wrapper, #rtl-toggle-btn');
+        legacyWidgets.forEach(el => {
+            const container = el.closest('.rtl-widget-container') || el.closest('.fixed') || el;
+            if (container && container.parentNode && !container.classList.contains('rtl-widget-container')) {
+                container.parentNode.removeChild(container);
+            }
+        });
+
         if (document.querySelector('.rtl-widget-container')) return;
 
         const widgetWrapper = document.createElement('div');

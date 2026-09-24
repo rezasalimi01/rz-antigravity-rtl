@@ -1,6 +1,6 @@
 {
   "name": "rz-antigravity-rtl",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Smart RTL patcher with UI settings for Antigravity Desktop and Antigravity IDE.",
   "main": "./bin/index.js",
   "scripts": {

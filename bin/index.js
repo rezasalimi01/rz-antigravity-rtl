@@ -93,9 +93,52 @@ function getDefaultIdeAppPath() {
         return '/Applications/Antigravity IDE.app/Contents/Resources/app';
     } else if (os.platform() === 'win32') {
         return path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Antigravity IDE', 'resources', 'app');
-    } else {
-        return '/opt/Antigravity IDE/resources/app';
     }
+}
+
+function cleanupConflictingGlobalPackages() {
+    const knownConflicts = ['antigravity-rtl', 'antigravity-rtl-patch'];
+    const npmCmd = os.platform() === 'win32' ? 'npm.cmd' : 'npm';
+    try {
+        const stdout = execSync(`${npmCmd} list -g --depth=0 --json`, {
+            stdio: ['ignore', 'pipe', 'ignore'],
+            encoding: 'utf8',
+            timeout: 6000
+        });
+        const data = JSON.parse(stdout);
+        const globalPkgs = data.dependencies ? Object.keys(data.dependencies) : [];
+        for (const pkgName of knownConflicts) {
+            if (globalPkgs.includes(pkgName)) {
+                const s = ora(`Found conflicting global package "${pkgName}". Removing it...`).start();
+                try {
+                    execSync(`${npmCmd} uninstall -g ${pkgName}`, {
+                        stdio: ['ignore', 'ignore', 'ignore'],
+                        timeout: 15000
+                    });
+                    s.succeed(`Successfully uninstalled conflicting global package "${pkgName}".`);
+                } catch (err) {
+                    s.warn(`Could not auto-remove global "${pkgName}". You can run "${npmCmd} uninstall -g ${pkgName}" manually.`);
+                }
+            }
+        }
+    } catch (e) {}
+}
+
+function purgePreviousRtlPatchesFromUtils(utilsCode) {
+    let cleaned = utilsCode;
+    // 1. Remove RZ Antigravity RTL with end tag
+    cleaned = cleaned.replace(/\/\* RZ ANTIGRAVITY RTL PATCH \*\/[\s\S]*?\/\* END RZ ANTIGRAVITY RTL PATCH \*\/\s*/g, 'void win.loadURL(url);\n    ');
+    // 2. Remove RZ Antigravity RTL without end tag
+    cleaned = cleaned.replace(/\/\* RZ ANTIGRAVITY RTL PATCH \*\/[\s\S]*?void win\.loadURL\(url\);/g, 'void win.loadURL(url);');
+    // 3. Remove upstream antigravity-rtl patch (starts with /* ANTIGRAVITY RTL PATCH */ and extends to return win;)
+    cleaned = cleaned.replace(/\/\* ANTIGRAVITY RTL PATCH \*\/[\s\S]*?\s*(?=return win;)/g, 'void win.loadURL(url);\n    ');
+    // 4. Remove any other third-party RTL patch containing SAVE_RTL_CONFIG before return win;
+    if (cleaned.includes('SAVE_RTL_CONFIG') && cleaned.includes('return win;')) {
+        cleaned = cleaned.replace(/\/\*[\s\S]*?(?:SAVE_RTL_CONFIG|RTL PATCH)[\s\S]*?\s*(?=return win;)/g, 'void win.loadURL(url);\n    ');
+    }
+    // 5. Clean up duplicate anchors if any
+    cleaned = cleaned.replace(/(void win\.loadURL\(url\);\s*){2,}/g, 'void win.loadURL(url);\n    ');
+    return cleaned;
 }
 
 const args = process.argv.slice(2);
@@ -183,14 +226,8 @@ async function patchDesktop(asarPath) {
         }
 
         let utilsCode = fs.readFileSync(utilsPath, 'utf8');
-
-        if (utilsCode.includes('/* RZ ANTIGRAVITY RTL PATCH */')) {
-            if (utilsCode.includes('/* END RZ ANTIGRAVITY RTL PATCH */')) {
-                utilsCode = utilsCode.replace(/\/\* RZ ANTIGRAVITY RTL PATCH \*\/[\s\S]*?\/\* END RZ ANTIGRAVITY RTL PATCH \*\/\s*/, 'void win.loadURL(url);');
-            } else {
-                utilsCode = utilsCode.replace(/\/\* RZ ANTIGRAVITY RTL PATCH \*\/[\s\S]*?void win\.loadURL\(url\);/, 'void win.loadURL(url);');
-            }
-        }
+        // Purge any previous RTL patches (original antigravity-rtl, older RZ, or third-party)
+        utilsCode = purgePreviousRtlPatchesFromUtils(utilsCode);
 
         const payloadPath = path.join(__dirname, 'payload.js');
         const payload = fs.readFileSync(payloadPath, 'utf8');
@@ -264,6 +301,13 @@ async function patchIDE(ideAppPath) {
             if (fs.existsSync(idePayloadDest)) {
                 fs.rmSync(idePayloadDest, { force: true });
             }
+            const legacyFiles = ['payload.js', 'rtl.js', 'rtl.css'];
+            for (const file of legacyFiles) {
+                const legacyPath = path.join(workbenchDir, file);
+                if (fs.existsSync(legacyPath)) {
+                    try { fs.rmSync(legacyPath, { force: true }); } catch (e) {}
+                }
+            }
             const ideFontsDir = path.join(workbenchDir, 'fonts');
             if (fs.existsSync(ideFontsDir)) {
                 fs.rmSync(ideFontsDir, { recursive: true, force: true });
@@ -297,12 +341,21 @@ async function patchIDE(ideAppPath) {
         return false;
     }
 
-    spinner.text = 'Copying IDE RTL payload and fonts...';
+    spinner.text = 'Purging legacy files and copying IDE RTL payload & fonts...';
     try {
         const idePayloadSource = path.join(__dirname, 'ide-payload.js');
         const fontSource = path.join(__dirname, 'Vazirmatn-Variable.woff2');
         const fontsDirSource = path.join(__dirname, 'fonts');
         const fontsDirDest = path.join(workbenchDir, 'fonts');
+
+        // Clean up legacy files from other RTL packages if present
+        const legacyFiles = ['payload.js', 'rtl.js', 'rtl.css'];
+        for (const file of legacyFiles) {
+            const legacyPath = path.join(workbenchDir, file);
+            if (fs.existsSync(legacyPath)) {
+                try { fs.rmSync(legacyPath, { force: true }); } catch (e) {}
+            }
+        }
 
         fs.copyFileSync(idePayloadSource, idePayloadDest);
         if (fs.existsSync(fontSource)) {
@@ -347,8 +400,10 @@ async function patchIDE(ideAppPath) {
                 return res;
             });
 
-            // 4. Remove any existing RZ script tag
-            htmlContent = htmlContent.replace(/<!-- RZ ANTIGRAVITY RTL -->\s*<script[^>]*ide-payload\.js[^>]*><\/script>\s*/gi, '');
+            // 4. Remove ALL previous RTL script/link tags and comments (RZ, original antigravity-rtl, or third-party)
+            htmlContent = htmlContent.replace(/<!--\s*(?:RZ\s*)?(?:ANTIGRAVITY\s*)?RTL[\s\S]*?-->\s*/gi, '');
+            htmlContent = htmlContent.replace(/<script[^>]*(?:ide-payload|payload|rtl)[^>]*><\/script>\s*/gi, '');
+            htmlContent = htmlContent.replace(/<link[^>]*rtl[^>]*>\s*/gi, '');
 
             // 5. Injection tag
             const injectionTag = '<!-- RZ ANTIGRAVITY RTL -->\n<script src="./ide-payload.js"></script>\n';
@@ -376,6 +431,10 @@ async function patchIDE(ideAppPath) {
 }
 
 async function main() {
+    if (!isRestore) {
+        cleanupConflictingGlobalPackages();
+    }
+
     const defaultAppAsar = getDefaultAppAsarPath();
     const defaultIdeApp = getDefaultIdeAppPath();
 
