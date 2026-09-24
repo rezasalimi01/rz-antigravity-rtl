@@ -1,152 +1,137 @@
-# Antigravity Smart RTL & UI Patcher
+# RZ Antigravity RTL & UI Patcher
 
-A smart and beautiful RTL (Right-to-Left) patch for the [Antigravity](https://github.com/google/antigravity) application.
+A smart and beautiful RTL (Right-to-Left) patch for both **Antigravity Desktop** and **Antigravity IDE**.
 
-This CLI tool automatically injects a sophisticated RTL engine into Antigravity, adding support for Persian (Farsi), Arabic, Hebrew, and other RTL languages, along with a sleek UI to configure fonts and settings on the fly.
+This CLI tool automatically injects a sophisticated RTL engine into Antigravity applications, adding support for Persian (Farsi), Arabic, Hebrew, and other RTL languages, along with a sleek UI to configure fonts and settings on the fly.
 
-https://github.com/user-attachments/assets/f2e8722d-3aeb-47d3-a37e-c33b6a89676e
+## ✨ Features
 
-## Features
-
+- **Dual Support**: Fully patches both **Antigravity Desktop** and **Antigravity IDE**.
+- **Strict Code Editor Isolation**: In Antigravity IDE, only the chat panel (`antigravity-agent-side-panel`, inputs, and questions) is RTL-patched. The Monaco code editor, file explorer, status bar, and code blocks (`<pre>`, `<code>`) remain strictly LTR and untouched!
+- **Neon Volt & Pitch Black Theme**: Modern obsidian & pitch black design (`#000000`) with vibrant electric lime accents (`#D0FE1B`) for maximum visual pop and readability.
+- **Fluid UI & Custom Spring Dropdowns**: Custom animated dropdown menus that open with smooth spring physics instead of rigid native OS selects.
+- **Click-to-Open & Micro-Animations**: Trigger button scales up slightly on hover and only opens on click. Changing slider values triggers a responsive micro-pulse badge animation.
+- **Draggable with 4-Corner Snap (Strictly Confined to Chat)**: Drag the settings button within the chat panel to snap intelligently to any of the 4 inner corners, never escaping into the Monaco editor or rest of IDE.
+- **Font Dropdown Selector**: Built-in dropdowns to easily pick between curated offline fonts:
+  - **Persian**: Default (Vazirmatn), IRANSans X, IRANYekanX Pro, Kalameh, Noora, Pelak, Ravi, Yekan Bakh
+  - **English**: Default (System), Open Sans, Roboto, Fira Sans
+  - **Code**: Default (Monospace), Fira Code, JetBrains Mono
+- **Live Slider Values**: Interactive Line Height and Font Size sliders with real-time numeric value displays and one-click reset buttons.
 - **Smart Auto-Direction**: Automatically detects if a paragraph is RTL or LTR and aligns it perfectly.
 - **Force RTL Mode**: Want everything aligned to the right? Just toggle the switch.
-- **Custom Typography**: Define different fonts for your RTL text, English text, and Code blocks!
-- **Line Height Control**: A precise slider to adjust the line height for better readability.
 - **Persian Keyboard Fix**: Maps `Shift + 2` to type `@` instead of `٬` on Persian keyboards.
-- **Beautiful Settings Panel**: A floating, non-intrusive UI widget at the bottom right corner.
-- **Vazirmatn Built-in**: Comes with the beautiful Vazirmatn variable font by default.
+- **Safe Backups & Restore**: Automatic backups created prior to patching, with a simple `--restore` command.
 
-## Installation
+## 🚀 Installation & Usage
 
-You don't need to download any files. Just run the following command in your terminal:
+You don't need to manually configure any files. Just run the following command in your terminal:
 
-### macOS
-Before running the patcher, make sure [Node.js](https://nodejs.org) is installed. You can install it from the official website, or if you already use Homebrew:
 ```bash
-brew install node
-```
-Because the tool needs to modify the Antigravity application files, you must run it with `sudo`:
-```bash
-sudo npx antigravity-rtl
-```
-> **macOS Users:** If you get a "Permission Denied" error even with sudo, ensure your terminal (e.g. Terminal, iTerm2, VS Code) has **App Management** permissions enabled in `System Settings > Privacy & Security > App Management`.
-
-### Linux
-Because the tool needs to modify the Antigravity application files, you must run it with `sudo`:
-```bash
-sudo apt install nodejs npm # Skip this line if Node.js is already installed.
-sudo npx antigravity-rtl
+npx rz-antigravity-rtl
 ```
 
-### Windows
-Open **PowerShell** as **Administrator** (Right-click -> Run as Administrator), then run:
+An interactive menu will detect your installed applications and let you choose:
+1. **Both Antigravity Desktop & Antigravity IDE (Recommended)**
+2. **Antigravity Desktop App only**
+3. **Antigravity IDE only**
+
+### Command-line Options
+
+```bash
+# Patch both Desktop and IDE automatically
+npx rz-antigravity-rtl --all
+
+# Patch only Antigravity IDE
+npx rz-antigravity-rtl --ide
+
+# Patch only Antigravity Desktop
+npx rz-antigravity-rtl --app
+
+# Restore original unpatched files
+npx rz-antigravity-rtl --restore
+npx rz-antigravity-rtl --ide --restore
+npx rz-antigravity-rtl --app --restore
+```
+
+### OS Specific Notes
+
+#### Windows
+Run **PowerShell** (as Administrator if your apps are in Program Files, or standard terminal if in LocalAppData):
 ```powershell
-winget install OpenJS.NodeJS.LTS # Skip this line if Node.js is already installed.
-npx antigravity-rtl
+npx rz-antigravity-rtl
+```
+
+#### macOS
+```bash
+sudo npx rz-antigravity-rtl
+```
+> **macOS Users:** If you get a "Permission Denied" error, ensure your terminal has **App Management** permissions in `System Settings > Privacy & Security > App Management`.
+
+#### Linux
+```bash
+sudo npx rz-antigravity-rtl
 ```
 
 > [!WARNING]
-> **App Updates:** Since updating the Antigravity application overwrites its internal files, the RTL patch will be removed. You will need to run the installation command again after each update to re-apply the patch.
-
-## Restoring to Original (Uninstall)
-
-If you ever want to revert Antigravity back to its original state (before the patch), simply run the command with the `--restore` flag:
-
-```bash
-sudo npx antigravity-rtl --restore
-```
-*(On Windows, run without `sudo` in an Administrator terminal)*
-
-## How it works
-
-This CLI tool:
-1. Locates your Antigravity installation.
-2. Creates a safe backup of the original `app.asar` file.
-3. Extracts the application and safely injects the Smart RTL Engine into the core logic (`utils.js`).
-4. Repacks the application so you can start using it immediately.
-
-## Future Plans (Roadmap)
-
-- Add Right-to-Left (RTL) support for **Antigravity IDE**.
-
-## Contributing
-
-Feel free to open issues or submit pull requests. Let's make Antigravity accessible and beautiful for everyone!
+> **App Updates:** Since updating Antigravity or Antigravity IDE overwrites internal files, you will need to run `npx rz-antigravity-rtl` again after updating to re-apply the patch.
 
 ---
 
 <div dir="rtl">
 
-# اصلاح‌کنندهٔ هوشمند راست‌به‌چپ در Antigravity
+# ابزار هوشمند راست‌به‌چپ RZ Antigravity RTL
 
-یک پچِ هوشمند و زیبا برای پشتیبانی از زبان‌های راست‌به‌چپ (RTL) در نرم‌افزار [Antigravity](https://github.com/google/antigravity).
+یک پچِ هوشمند و زیبا برای پشتیبانی کامل از زبان‌های راست‌به‌چپ (RTL) در هر دو برنامهٔ **Antigravity Desktop** و **Antigravity IDE**.
 
-این ابزارِ خط فرمان (CLI) به صورت کاملاً خودکار یک موتور پیشرفتهٔ RTL را به هستهٔ برنامهٔ آنتی‌گرویتی تزریق می‌کند تا از زبان‌های فارسی، عربی و عبری به بهترین شکل پشتیبانی شود. همچنین یک پنل تنظیماتِ (UI) برای تغییر زندهٔ فونت‌ها در اختیار شما قرار می‌دهد.
+این ابزار خط فرمان (CLI) به صورت خودکار موتور پیشرفتهٔ RTL را به هستهٔ برنامه و محیط چت آنتی‌گرویتی تزریق می‌کند تا از زبان‌های فارسی، عربی و عبری به بهترین شکل پشتیبانی شود و یک پنل تنظیماتِ شناور با نام **RZ Antigravity RTL** برای تغییر زندهٔ فونت‌ها، اندازهٔ خطوط و قلم در اختیار شما قرار می‌دهد.
 
-## امکانات
+## ✨ امکانات
 
-- **راست‌چین هوشمند (Smart Auto-Direction)**: سیستم به طور خودکار تشخیص می‌دهد که پاراگراف شما با حرف انگلیسی شروع شده یا فارسی، و چیدمان را بر همان اساس تنظیم می‌کند.
-- **حالت راست‌چینِ اجباری (Force RTL Mode)**: دوست دارید همه چیز (حتی پیام‌های انگلیسی) کاملاً در سمت راست قرار بگیرند؟ فقط کافیست سوئیچ را روشن کنید!
-- **تنظیماتِ پیشرفتهِ فونت**: می‌توانید برای متون فارسی، متون انگلیسی و کدهای برنامه‌نویسیِ داخل چت، فونت‌های کاملاً جداگانه‌ای تعریف کنید.
-- **کنترل فاصلهٔ خطوط (Line Height)**: با استفاده از اسلایدر می‌توانید فاصلهٔ خطوط را برای خوانایی بهتر متن تنظیم کنید.
-- **حل مشکل کیبورد فارسی**: این ابزار کلید ترکیبی `Shift + 2` روی کیبورد فارسی را اصلاح می‌کند تا به جای «٬» علامت `@` تایپ شود.
-- **پنل تنظیمات زیبا**: تمام این تنظیمات در یک ویجتِ کوچک، مدرن و شناور در پایینِ صفحه قرار گرفته‌اند.
-- **فونت وزیرمتن**: فونت زیبای Vazirmatn Variable به صورت پیش‌فرض در این افزونه گنجانده شده است.
+- **پشتیبانی دوگانه**: قابل اعمال روی هر دو برنامهٔ **Antigravity Desktop** و **Antigravity IDE**.
+- **ایزوله بودن کامل ادیتور کد در IDE**: محیط کدنویسی اصلی (Monaco Editor)، درخت فایل‌ها، تب‌ها، منوها و بلوک‌های کد (`pre` و `code`) کاملاً دست‌نخورده و چپ‌چین می‌مانند و فقط پنل چت و اینپوت‌ها راست‌چین می‌شوند.
+- **ترکیب رنگی نئون لایم و مشکی عمیق**: تم مدرن مشکی خالص (`#000000`) با لهجه‌های جذاب سبز-فسفری/لایم نئون (`#D0FE1B`) برای کنتراست فوق‌العاده و زیبایی چشم‌نواز.
+- **رابط کاربری نرم و دراپ‌داون‌های فنری انیمیشنی**: باز شدن دراپ‌داون‌ها با فیزیک اسپرینگ (فنری) نرم و مدرن به جای سلکتورهای ساده و خشک پیش‌فرض سیستم‌عامل.
+- **میکرو-انیمیشن‌ها و باز شدن کلیکی**: دکمه تنظیمات با رفتن موس روی آن کمی بزرگتر می‌شود و فقط با کلیک باز می‌شود؛ تغییر اسلایدرها همراه با پالس و میکروانیمیشن مقادیر عددی است.
+- **درگ و اسنپ هوشمند به ۴ گوشه (کاملاً ایزوله در باکس چت)**: در Antigravity IDE، دکمه تنها در محدودهٔ داخلی باکس چت حرکت می‌کند و به هیچ وجه وارد محیط ادیتور کد یا سایر بخش‌های IDE نمی‌شود و به ۴ گوشهٔ داخلی باکس اسنپ می‌شود.
+- **دراپ‌داون اختصاصی انتخاب فونت‌های آفلاین**:
+  - **فارسی**: پیش‌فرض (Vazirmatn)، ایران سنس ایکس (IRANSans X)، ایران یکان ایکس (IRANYekanX Pro)، کلمه (Kalameh)، نورا (Noora)، پلاک (Pelak)، راوی (Ravi)، یکان بخ (Yekan Bakh)
+  - **انگلیسی**: پیش‌فرض (System)، اوپن سنس (Open Sans)، روبوتو (Roboto)، فیرا سنس (Fira Sans)
+  - **کد نویسی**: پیش‌فرض (Monospace)، فیرا کد (Fira Code)، جت‌برینز مونو (JetBrains Mono)
+- **نمایش عددی زنده برای اسلایدرها**: نمایش عدد دقیق Line Height و Font Size در کنار اسلایدرها به همراه دکمه‌های ریست سریع.
+- **راست‌چین هوشمند (Smart Auto-Direction)**: سیستم به صورت خودکار تشخیص می‌دهد که هر پیام با حرف فارسی شروع شده یا انگلیسی و جهت آن را تنظیم می‌کند.
+- **حالت راست‌چینِ اجباری (Force RTL Mode)**: قابلیت سوئیچ برای راست‌چین کردن تمام پیام‌های چت.
+- **اصلاح کیبورد فارسی**: رفع مشکل کلید `Shift + 2` برای تایپ علامت `@` به جای «٬».
+- **بازگردانی امن (Restore)**: تهیه بک‌آپ خودکار و بازگردانی سریع به حالت پیش‌فرض با فلگ `--restore`.
 
-## آموزش نصب
+## 🚀 نحوهٔ استفاده
 
-بدون نیاز به دانلود هیچ فایلی، فقط کافیست دستور زیر را در ترمینال سیستم خود اجرا کنید:
-
-### در مک (macOS)
-قبل از اجرای پچر، مطمئن شوید [Node.js](https://nodejs.org) روی سیستم شما نصب است. می‌توانید آن را از سایت رسمی Node.js نصب کنید، یا اگر از Homebrew استفاده می‌کنید:
-```bash
-brew install node
-```
-از آنجایی که این ابزار قرار است فایل‌های سیستمی آنتی‌گرویتی را ویرایش کند، باید حتماً دسترسی `sudo` داشته باشد:
-```bash
-sudo npx antigravity-rtl
-```
-> **کاربران مک (macOS):** اگر با وجود استفاده از sudo باز هم خطای Permission Denied دریافت کردید، باید به ترمینال خود (مثل Terminal، iTerm2 یا VS Code) دسترسی **App Management** بدهید. برای این کار به مسیر `System Settings > Privacy & Security > App Management` بروید و دسترسی ترمینال خود را فعال کنید.
-
-### در لینوکس
-از آنجایی که این ابزار قرار است فایل‌های سیستمی آنتی‌گرویتی را ویرایش کند، باید حتماً دسترسی `sudo` داشته باشد:
-```bash
-sudo apt install nodejs npm # اگر Node.js از قبل نصب است، این خط را رد کنید.
-sudo npx antigravity-rtl
-```
-
-### در ویندوز
-برنامهٔ **PowerShell** را در حالت **Administrator** (راست‌کلیک -> Run as Administrator) باز کنید و دستور زیر را بنویسید:
-```powershell
-winget install OpenJS.NodeJS.LTS # اگر Node.js از قبل نصب است، این خط را رد کنید.
-npx antigravity-rtl
-```
-
-> [!WARNING]
-> **به‌روزرسانی برنامه:** از آنجا که آپدیت کردنِ برنامهٔ آنتی‌گرویتی کدهای آن را بازنویسی می‌کند، پچِ اعمال‌شده از بین خواهد رفت و لازم است پس از هر بار آپدیت، دستور نصب را مجدداً اجرا کنید.
-
-## بازگردانی به حالت اولیه (Uninstall)
-
-اگر زمانی خواستید آنتی‌گرویتی را به حالتِ کارخانه (قبل از نصب این پچ) برگردانید، فقط کافیست دستور بالا را با فلگ `--restore` اجرا کنید:
+برای اجرا کافیست دستور زیر را در ترمینال وارد کنید:
 
 ```bash
-sudo npx antigravity-rtl --restore
+npx rz-antigravity-rtl
 ```
-*(کاربران ویندوز این دستور را بدون `sudo` و در یک ترمینال ادمین اجرا کنند)*
 
-## این ابزار چگونه کار می‌کند؟
+ابزار به صورت خودکار برنامه‌های نصب‌شده روی سیستم شما را شناسایی کرده و منوی زیر را نمایش می‌دهد:
+1. **Both Antigravity Desktop & Antigravity IDE (Recommended)**
+2. **Antigravity Desktop App only**
+3. **Antigravity IDE only**
 
-1. ابزار به صورت خودکار محل نصب آنتی‌گرویتی را روی سیستم شما پیدا می‌کند.
-2. یک نسخهٔ پشتیبانِ امن از فایل اوریجینالِ `app.asar` تهیه می‌کند.
-3. فایل را استخراج کرده و کدهای موتورِ RTL را به ایمن‌ترین شکل ممکن به هستهٔ برنامه تزریق می‌کند.
-4. در نهایت برنامه را مجدداً بسته‌بندی می‌کند تا بتوانید بلافاصله از آن لذت ببرید.
+### گزینه‌های خط فرمان
 
-## کارهای آینده (Roadmap)
+```bash
+# پچ کردن هم‌زمان دسکتاپ و IDE
+npx rz-antigravity-rtl --all
 
-- اضافه کردن قابلیت حل مشکل راست‌به‌چپ برای **Antigravity IDE**.
+# پچ کردن فقط محیط Antigravity IDE
+npx rz-antigravity-rtl --ide
 
-## مشارکت در توسعه
+# پچ کردن فقط برنامه Antigravity دسکتاپ
+npx rz-antigravity-rtl --app
 
-با کمال میل از نظرات، گزارشِ باگ‌ها و Pull Request های شما استقبال می‌شود. 
+# بازگردانی به نسخه اصلی (حذف پچ)
+npx rz-antigravity-rtl --restore
+npx rz-antigravity-rtl --ide --restore
+npx rz-antigravity-rtl --app --restore
+```
 
 </div>

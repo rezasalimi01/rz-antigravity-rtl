@@ -1,7 +1,7 @@
 {
-  "name": "antigravity-rtl",
-  "version": "1.0.10",
-  "description": "A smart RTL (Right-to-Left) patcher with UI settings for the Antigravity application.",
+  "name": "rz-antigravity-rtl",
+  "version": "1.1.0",
+  "description": "Smart RTL patcher with UI settings for Antigravity Desktop and Antigravity IDE.",
   "main": "./bin/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -31,6 +31,7 @@
   },
   "type": "module",
   "bin": {
+    "rz-antigravity-rtl": "./bin/index.js",
     "antigravity-rtl": "./bin/index.js"
   }
 }
