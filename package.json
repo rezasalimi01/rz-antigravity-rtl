@@ -8,15 +8,17 @@
   },
   "keywords": [
     "antigravity",
+    "antigravity-ide",
     "rtl",
     "persian",
     "arabic",
     "hebrew",
     "patcher",
     "electron",
-    "asar"
+    "asar",
+    "monaco-editor"
   ],
-  "author": "mmnaderi",
+  "author": "Reza Salimi <rezasalimiofficiall@gmail.com>",
   "license": "MIT",
   "files": [
     "bin",
