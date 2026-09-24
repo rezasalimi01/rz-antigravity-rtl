@@ -821,8 +821,14 @@
         });
     }
 
-    document.addEventListener('input', updateDir, { capture: true });
-    document.addEventListener('focusin', updateDir, { capture: true });
+    document.addEventListener('input', () => {
+        updateDir();
+        updateBottomPosition();
+    }, { capture: true });
+    document.addEventListener('focusin', () => {
+        updateDir();
+        updateBottomPosition();
+    }, { capture: true });
 
     // Locate Chat Box specifically in IDE
     function getChatBox() {
@@ -840,6 +846,122 @@
             }
         }
         return document.querySelector('.monaco-workbench') || document.body;
+    }
+
+    // Dynamic Bottom Offset for IDE chat box (keeps toggle button 10px above typing input box)
+    let lastCalculatedBottom = null;
+    let observedInput = null;
+    let inputObserver = null;
+    if (typeof window !== 'undefined' && window.ResizeObserver) {
+        inputObserver = new ResizeObserver(() => {
+            updateBottomPosition();
+        });
+    }
+
+    function getChatInputTopOffset(chatBox) {
+        if (!chatBox) return null;
+        const chatRect = chatBox.getBoundingClientRect();
+        if (chatRect.height <= 0) return null;
+
+        // Common input selectors inside Antigravity IDE / VS Code chat
+        const selectorList = [
+            'textarea',
+            '[contenteditable="true"]',
+            '[contenteditable]:not([contenteditable="false"])',
+            '.interactive-input-part',
+            '.interactive-input',
+            '[class*="interactive-input"]',
+            '[class*="chat-input"]',
+            '[class*="inputContainer"]',
+            '[class*="input-container"]',
+            '[class*="composer"]',
+            '[class*="prompt"]'
+        ];
+
+        let candidateElements = [];
+        for (const sel of selectorList) {
+            try {
+                const found = chatBox.querySelectorAll(sel);
+                for (let i = 0; i < found.length; i++) {
+                    candidateElements.push(found[i]);
+                }
+            } catch (e) {}
+        }
+
+        // Filter elements that are visible and positioned in the lower portion of the chat box
+        const validInputs = candidateElements.filter(el => {
+            if (!el || el.offsetParent === null) return false;
+            const r = el.getBoundingClientRect();
+            return (
+                r.width > 20 &&
+                r.height > 10 &&
+                r.top > (chatRect.top + chatRect.height * 0.25) &&
+                r.bottom <= (chatRect.bottom + 60)
+            );
+        });
+
+        if (validInputs.length === 0) return null;
+
+        // Sort by bottom coordinate descending (find the element closest to the bottom of the chat panel)
+        validInputs.sort((a, b) => b.getBoundingClientRect().bottom - a.getBoundingClientRect().bottom);
+        const lowestInput = validInputs[0];
+
+        // Find the outermost card/container of this input section within chatBox
+        let bestContainer = lowestInput;
+        let curr = lowestInput.parentElement;
+        while (curr && curr !== chatBox && curr !== document.body) {
+            const r = curr.getBoundingClientRect();
+            if (
+                r.height > 0 &&
+                r.height < (chatRect.height * 0.5) &&
+                r.top >= (chatRect.top + chatRect.height * 0.2)
+            ) {
+                bestContainer = curr;
+            } else {
+                break;
+            }
+            curr = curr.parentElement;
+        }
+
+        if (inputObserver && bestContainer !== observedInput) {
+            if (observedInput) inputObserver.unobserve(observedInput);
+            inputObserver.observe(bestContainer);
+            observedInput = bestContainer;
+        }
+
+        const containerRect = bestContainer.getBoundingClientRect();
+        const distFromChatBottom = chatRect.bottom - containerRect.top;
+
+        if (distFromChatBottom >= 15 && distFromChatBottom < (chatRect.height * 0.65)) {
+            return Math.round(distFromChatBottom + 10); // Exactly 10px spacing above the input box
+        }
+
+        return null;
+    }
+
+    function updateBottomPosition() {
+        const container = document.querySelector('.rtl-widget-container');
+        if (!container || container.classList.contains('dragging')) return;
+
+        // Dynamic adjustment is strictly for bottom corners in Antigravity IDE
+        if (currentCorner !== 'br' && currentCorner !== 'bl') {
+            if (container.style.bottom) {
+                container.style.removeProperty('bottom');
+            }
+            lastCalculatedBottom = null;
+            return;
+        }
+
+        const chatBox = getChatBox();
+        if (!chatBox) return;
+
+        const dynamicBottom = getChatInputTopOffset(chatBox);
+        const targetBottom = dynamicBottom || 18;
+
+        if (lastCalculatedBottom !== targetBottom) {
+            lastCalculatedBottom = targetBottom;
+            container.style.setProperty('bottom', `${targetBottom}px`, 'important');
+        }
     }
 
     function attachWidget() {
@@ -862,11 +984,14 @@
         } else if (container.parentNode !== document.body) {
             document.body.appendChild(container);
         }
+
+        updateBottomPosition();
     }
 
     let updateDirRAF = null;
     const observer = new MutationObserver(() => {
         attachWidget();
+        updateBottomPosition();
         if (!isRTL) return;
         if (updateDirRAF) cancelAnimationFrame(updateDirRAF);
         updateDirRAF = requestAnimationFrame(updateDir);
@@ -881,6 +1006,8 @@
     }
 
     setInterval(updateDir, 600);
+    setInterval(updateBottomPosition, 300);
+    window.addEventListener('resize', updateBottomPosition);
 
     // Keyboard Shortcuts: Alt + R to toggle, Shift + 2 for @
     document.addEventListener('keydown', (e) => {
@@ -1213,6 +1340,7 @@
             container.style.removeProperty('right');
             container.style.removeProperty('top');
             container.style.removeProperty('bottom');
+            updateBottomPosition();
         }
 
         applyCorner(currentCorner);

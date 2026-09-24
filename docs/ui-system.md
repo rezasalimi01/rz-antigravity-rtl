@@ -95,6 +95,14 @@ The popover panel automatically alters its origin and positioning based on the s
 - **`corner-tr` (Top-Right)**: Opens downwards and leftwards (`transform-origin: top right`).
 - **`corner-tl` (Top-Left)**: Opens downwards and rightwards (`transform-origin: top left`).
 
+### IDE Dynamic Bottom-Input Avoidance:
+In **Antigravity IDE**, the chat panel is narrower and contains a persistent input composer at the bottom. To prevent overlapping the user's typing area:
+- When docked in `corner-br` or `corner-bl`, `getChatInputTopOffset` identifies the visible input container and calculates its top coordinate relative to the chat box.
+- The widget dynamically floats **10px above the input box**.
+- When typing causes the input box to expand across multiple lines, a `ResizeObserver` detects the height change and animates the toggle button upward in real-time.
+- When docked in `corner-tr` or `corner-tl`, standard top positioning (`top: 18px`) is restored.
+- **Note**: This dynamic avoidance is exclusive to Antigravity IDE; Antigravity Desktop retains standard corner anchoring.
+
 ---
 
 ## 5. Micro-Animations: Debounced Value Pulse
