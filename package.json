@@ -1,10 +1,18 @@
 {
   "name": "rz-antigravity-rtl",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Smart RTL patcher with UI settings for Antigravity Desktop and Antigravity IDE.",
   "main": "./bin/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rezasalimi01/rz-antigravity-rtl.git"
+  },
+  "homepage": "https://github.com/rezasalimi01/rz-antigravity-rtl#readme",
+  "bugs": {
+    "url": "https://github.com/rezasalimi01/rz-antigravity-rtl/issues"
   },
   "keywords": [
     "antigravity",
