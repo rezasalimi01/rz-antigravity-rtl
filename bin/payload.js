@@ -115,7 +115,7 @@ win.webContents.on('dom-ready', () => {
                 widgetStyle.id = 'rtl-widget-style';
                 widgetStyle.textContent = \`
                     .rtl-widget-container {
-                        position: fixed !important;
+                        position: absolute !important;
                         width: 38px !important;
                         height: 38px !important;
                         direction: ltr !important;
@@ -738,9 +738,14 @@ win.webContents.on('dom-ready', () => {
 
             document.body.addEventListener('input', updateDir, { capture: true });
             document.body.addEventListener('focusin', updateDir, { capture: true });
-            const observer = new MutationObserver(updateDir);
+            const observer = new MutationObserver(() => {
+                attachWidget();
+                updateDir();
+            });
             observer.observe(document.body, { childList: true, subtree: true });
             setInterval(updateDir, 500);
+            setInterval(attachWidget, 1000);
+            window.addEventListener('resize', attachWidget);
             
             // Keyboard Shortcuts
             document.addEventListener('keydown', (e) => {
@@ -925,9 +930,41 @@ win.webContents.on('dom-ready', () => {
                   </div>
                 </div>
             \`;
-            document.body.appendChild(widgetWrapper.firstElementChild);
-            
-            const container = document.querySelector('.rtl-widget-container');
+            function getDesktopChatBox() {
+                const cv = document.querySelector('[data-testid="conversation-view"]');
+                if (cv) {
+                    const pane = cv.closest('[class*="group/pane"]') || cv.parentElement;
+                    if (pane && pane.getBoundingClientRect().width > 100) return pane;
+                    return cv;
+                }
+                const pane = document.querySelector('[class*="group/pane"]');
+                if (pane && pane.getBoundingClientRect().width > 100) return pane;
+                return document.querySelector('.flex-1.flex.flex-col.min-w-0.h-full') || document.body;
+            }
+
+            const container = widgetWrapper.firstElementChild;
+
+            function attachWidget() {
+                if (!container) return;
+                const chatBox = getDesktopChatBox();
+                const targetParent = (chatBox && chatBox !== document.body) ? chatBox : document.body;
+
+                if (targetParent !== document.body) {
+                    const cs = window.getComputedStyle(targetParent);
+                    if (cs.position === 'static') {
+                        targetParent.style.setProperty('position', 'relative', 'important');
+                    }
+                    container.style.setProperty('position', 'absolute', 'important');
+                } else {
+                    container.style.setProperty('position', 'fixed', 'important');
+                }
+
+                if (container.parentNode !== targetParent) {
+                    targetParent.appendChild(container);
+                }
+            }
+
+            attachWidget();
             const trigger = container.querySelector('.rtl-widget-trigger');
             const toggleBtn = document.getElementById('rtl-toggle-btn');
             const toggleLabel = document.getElementById('rtl-toggle-label');
@@ -1026,11 +1063,13 @@ win.webContents.on('dom-ready', () => {
 
             applyCorner(currentCorner);
 
-            // Dragging with 4-Corner Snap
+            // Dragging with 4-Corner Snap strictly confined to Chat Box
             let isMouseDown = false;
             let isDragging = false;
             let startX = 0, startY = 0;
             let initialLeft = 0, initialTop = 0;
+            let currentDragX = 0, currentDragY = 0;
+            let boxRect = null;
 
             trigger.addEventListener('mousedown', (e) => {
                 if (e.button !== 0) return;
@@ -1040,9 +1079,14 @@ win.webContents.on('dom-ready', () => {
                 startX = e.clientX;
                 startY = e.clientY;
 
+                const chatBox = getDesktopChatBox();
+                boxRect = chatBox ? chatBox.getBoundingClientRect() : document.body.getBoundingClientRect();
                 const elemRect = container.getBoundingClientRect();
-                initialLeft = elemRect.left;
-                initialTop = elemRect.top;
+
+                initialLeft = elemRect.left - boxRect.left;
+                initialTop = elemRect.top - boxRect.top;
+                currentDragX = initialLeft;
+                currentDragY = initialTop;
             });
 
             window.addEventListener('mousemove', (e) => {
@@ -1058,16 +1102,21 @@ win.webContents.on('dom-ready', () => {
                 }
 
                 if (isDragging) {
-                    const minX = 10;
-                    const maxX = Math.max(minX, window.innerWidth - 48);
-                    const minY = 10;
-                    const maxY = Math.max(minY, window.innerHeight - 48);
+                    if (!boxRect) {
+                        const chatBox = getDesktopChatBox();
+                        boxRect = chatBox ? chatBox.getBoundingClientRect() : document.body.getBoundingClientRect();
+                    }
 
-                    const currentX = Math.max(minX, Math.min(maxX, initialLeft + dx));
-                    const currentY = Math.max(minY, Math.min(maxY, initialTop + dy));
+                    const minX = 14;
+                    const maxX = Math.max(minX, boxRect.width - 52);
+                    const minY = 14;
+                    const maxY = Math.max(minY, boxRect.height - 52);
 
-                    container.style.setProperty('left', currentX + 'px', 'important');
-                    container.style.setProperty('top', currentY + 'px', 'important');
+                    currentDragX = Math.max(minX, Math.min(maxX, initialLeft + dx));
+                    currentDragY = Math.max(minY, Math.min(maxY, initialTop + dy));
+
+                    container.style.setProperty('left', currentDragX + 'px', 'important');
+                    container.style.setProperty('top', currentDragY + 'px', 'important');
                     container.style.setProperty('right', 'auto', 'important');
                     container.style.setProperty('bottom', 'auto', 'important');
                 }
@@ -1078,15 +1127,46 @@ win.webContents.on('dom-ready', () => {
                 isMouseDown = false;
 
                 if (isDragging) {
-                    container.classList.remove('dragging');
-                    const elemRect = container.getBoundingClientRect();
-                    const centerX = (elemRect.left + elemRect.right) / 2;
-                    const centerY = (elemRect.top + elemRect.bottom) / 2;
+                    if (!boxRect) {
+                        const chatBox = getDesktopChatBox();
+                        boxRect = chatBox ? chatBox.getBoundingClientRect() : document.body.getBoundingClientRect();
+                    }
 
-                    const isLeft = centerX < (window.innerWidth / 2);
-                    const isTop = centerY < (window.innerHeight / 2);
+                    const centerX = currentDragX + 19;
+                    const centerY = currentDragY + 19;
 
+                    const isLeft = centerX < (boxRect.width / 2);
+                    const isTop = centerY < (boxRect.height / 2);
                     const corner = (isTop ? 't' : 'b') + (isLeft ? 'l' : 'r');
+
+                    // Pre-align properties for smooth CSS transition without jumps:
+                    const currentBottom = Math.max(0, boxRect.height - currentDragY - 38);
+                    const currentRight = Math.max(0, boxRect.width - currentDragX - 38);
+
+                    if (corner === 'br') {
+                        container.style.setProperty('right', currentRight + 'px', 'important');
+                        container.style.removeProperty('left');
+                        container.style.setProperty('bottom', currentBottom + 'px', 'important');
+                        container.style.removeProperty('top');
+                    } else if (corner === 'bl') {
+                        container.style.setProperty('left', currentDragX + 'px', 'important');
+                        container.style.removeProperty('right');
+                        container.style.setProperty('bottom', currentBottom + 'px', 'important');
+                        container.style.removeProperty('top');
+                    } else if (corner === 'tr') {
+                        container.style.setProperty('right', currentRight + 'px', 'important');
+                        container.style.removeProperty('left');
+                        container.style.setProperty('top', currentDragY + 'px', 'important');
+                        container.style.removeProperty('bottom');
+                    } else if (corner === 'tl') {
+                        container.style.setProperty('left', currentDragX + 'px', 'important');
+                        container.style.removeProperty('right');
+                        container.style.setProperty('top', currentDragY + 'px', 'important');
+                        container.style.removeProperty('bottom');
+                    }
+
+                    void container.offsetWidth;
+                    container.classList.remove('dragging');
                     applyCorner(corner);
 
                     setTimeout(() => { isDragging = false; }, 60);
@@ -1097,6 +1177,7 @@ win.webContents.on('dom-ready', () => {
                         document.querySelectorAll('.rtl-dropdown.open').forEach(d => d.classList.remove('open'));
                     }
                 }
+                boxRect = null;
             });
 
             document.addEventListener('click', (e) => {

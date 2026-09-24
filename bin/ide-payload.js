@@ -64,13 +64,13 @@
             /* 4 Corners strictly relative to chat box */
             .rtl-widget-container.corner-br {
                 right: 14px !important;
-                bottom: 18px !important;
+                bottom: var(--rtl-bottom, 18px) !important;
                 left: auto !important;
                 top: auto !important;
             }
             .rtl-widget-container.corner-bl {
                 left: 14px !important;
-                bottom: 18px !important;
+                bottom: var(--rtl-bottom, 18px) !important;
                 right: auto !important;
                 top: auto !important;
             }
@@ -829,6 +829,12 @@
         updateDir();
         updateBottomPosition();
     }, { capture: true });
+    document.addEventListener('keyup', () => {
+        updateBottomPosition();
+    }, { capture: true });
+    document.addEventListener('focusout', () => {
+        setTimeout(updateBottomPosition, 100);
+    }, { capture: true });
 
     // Locate Chat Box specifically in IDE
     function getChatBox() {
@@ -858,7 +864,34 @@
         });
     }
 
-    function getChatInputTopOffset(chatBox) {
+    function isChatActive(chatBox) {
+        if (!chatBox) return false;
+
+        // 1. Check if user steps or messages exist
+        const hasUserSteps = chatBox.querySelectorAll('[data-testid="user-input-step"]').length > 0;
+        if (hasUserSteps) return true;
+
+        const hasMessages = chatBox.querySelectorAll(
+            '.leading-relaxed p, .leading-relaxed li, .prose p, .markdown-body p, [data-testid="chat-message"], .cursor-edit.text-secondary-foreground, [class*="chat-message"], .interactive-item-container'
+        ).length > 0;
+        if (hasMessages) return true;
+
+        // 2. Check if user is typing or input box has text ("متن استارت شد")
+        const inputElements = chatBox.querySelectorAll('textarea, [contenteditable="true"], [contenteditable]:not([contenteditable="false"])');
+        for (let i = 0; i < inputElements.length; i++) {
+            const inp = inputElements[i];
+            if (inp.tagName === 'TEXTAREA') {
+                if (inp.value && inp.value.trim().length > 0) return true;
+            } else {
+                const txt = (inp.textContent || '').replace(/[\u200B-\u200F\uFEFF]/g, '').trim();
+                if (txt.length > 0) return true;
+            }
+        }
+
+        return false;
+    }
+
+    function getChatInputInfo(chatBox) {
         if (!chatBox) return null;
         const chatRect = chatBox.getBoundingClientRect();
         if (chatRect.height <= 0) return null;
@@ -895,7 +928,6 @@
             return (
                 r.width > 20 &&
                 r.height > 10 &&
-                r.top > (chatRect.top + chatRect.height * 0.25) &&
                 r.bottom <= (chatRect.bottom + 60)
             );
         });
@@ -913,8 +945,8 @@
             const r = curr.getBoundingClientRect();
             if (
                 r.height > 0 &&
-                r.height < (chatRect.height * 0.5) &&
-                r.top >= (chatRect.top + chatRect.height * 0.2)
+                r.height < (chatRect.height * 0.6) &&
+                r.top >= (chatRect.top + chatRect.height * 0.1)
             ) {
                 bestContainer = curr;
             } else {
@@ -923,29 +955,29 @@
             curr = curr.parentElement;
         }
 
-        if (inputObserver && bestContainer !== observedInput) {
-            if (observedInput) inputObserver.unobserve(observedInput);
-            inputObserver.observe(bestContainer);
-            observedInput = bestContainer;
-        }
-
         const containerRect = bestContainer.getBoundingClientRect();
-        const distFromChatBottom = chatRect.bottom - containerRect.top;
+        const gapFromBottom = chatRect.bottom - containerRect.bottom;
+        const active = isChatActive(chatBox);
 
-        if (distFromChatBottom >= 15 && distFromChatBottom < (chatRect.height * 0.65)) {
-            return Math.round(distFromChatBottom + 10); // Exactly 10px spacing above the input box
-        }
+        // Input is docked at bottom IF gapFromBottom <= 75px OR chat has messages / typed text
+        const isAtBottom = (gapFromBottom <= 75) || active;
+        const distFromChatBottom = Math.round((chatRect.bottom - containerRect.top) + 10);
 
-        return null;
+        return {
+            container: bestContainer,
+            isAtBottom: isAtBottom,
+            offset: distFromChatBottom
+        };
     }
 
     function updateBottomPosition() {
         const container = document.querySelector('.rtl-widget-container');
-        if (!container || container.classList.contains('dragging')) return;
+        if (!container) return;
 
         // Dynamic adjustment is strictly for bottom corners in Antigravity IDE
         if (currentCorner !== 'br' && currentCorner !== 'bl') {
-            if (container.style.bottom) {
+            if (container.style.bottom || container.style.getPropertyValue('--rtl-bottom')) {
+                container.style.removeProperty('--rtl-bottom');
                 container.style.removeProperty('bottom');
             }
             lastCalculatedBottom = null;
@@ -955,12 +987,26 @@
         const chatBox = getChatBox();
         if (!chatBox) return;
 
-        const dynamicBottom = getChatInputTopOffset(chatBox);
-        const targetBottom = dynamicBottom || 18;
+        const info = getChatInputInfo(chatBox);
+        let targetBottom = 18; // default corner bottom on initial screen
 
-        if (lastCalculatedBottom !== targetBottom) {
-            lastCalculatedBottom = targetBottom;
-            container.style.setProperty('bottom', `${targetBottom}px`, 'important');
+        if (info && info.isAtBottom && info.offset >= 18 && info.offset < (chatBox.getBoundingClientRect().height * 0.75)) {
+            targetBottom = info.offset;
+            if (inputObserver && info.container !== observedInput) {
+                if (observedInput) inputObserver.unobserve(observedInput);
+                inputObserver.observe(info.container);
+                observedInput = info.container;
+            }
+        }
+
+        // Always update CSS variable on container so classes corner-br / corner-bl use it
+        container.style.setProperty('--rtl-bottom', `${targetBottom}px`);
+
+        if (!container.classList.contains('dragging')) {
+            if (lastCalculatedBottom !== targetBottom || !container.style.bottom) {
+                lastCalculatedBottom = targetBottom;
+                container.style.setProperty('bottom', `${targetBottom}px`, 'important');
+            }
         }
     }
 
@@ -1339,8 +1385,13 @@
             container.style.removeProperty('left');
             container.style.removeProperty('right');
             container.style.removeProperty('top');
-            container.style.removeProperty('bottom');
-            updateBottomPosition();
+            if (corner === 'tr' || corner === 'tl') {
+                container.style.removeProperty('bottom');
+                container.style.removeProperty('--rtl-bottom');
+                lastCalculatedBottom = null;
+            } else {
+                updateBottomPosition();
+            }
         }
 
         applyCorner(currentCorner);
@@ -1350,6 +1401,7 @@
         let isDragging = false;
         let startX = 0, startY = 0;
         let initialLeft = 0, initialTop = 0;
+        let currentDragX = 0, currentDragY = 0;
         let boxRect = null;
 
         trigger.addEventListener('mousedown', (e) => {
@@ -1366,6 +1418,8 @@
 
             initialLeft = elemRect.left - boxRect.left;
             initialTop = elemRect.top - boxRect.top;
+            currentDragX = initialLeft;
+            currentDragY = initialTop;
         });
 
         window.addEventListener('mousemove', (e) => {
@@ -1388,13 +1442,23 @@
                 const minX = 8;
                 const maxX = Math.max(minX, boxRect.width - 46);
                 const minY = 8;
-                const maxY = Math.max(minY, boxRect.height - 46);
+                let maxY = Math.max(minY, boxRect.height - 46);
 
-                const currentX = Math.max(minX, Math.min(maxX, initialLeft + dx));
-                const currentY = Math.max(minY, Math.min(maxY, initialTop + dy));
+                const cBox = getChatBox();
+                if (cBox) {
+                    const info = getChatInputInfo(cBox);
+                    if (info && info.isAtBottom && info.offset) {
+                        // Keep container bottom at least 10px above input box (widget height: 38px)
+                        const maxAllowedTop = Math.max(minY, boxRect.height - info.offset - 38);
+                        maxY = Math.min(maxY, maxAllowedTop);
+                    }
+                }
 
-                container.style.setProperty('left', currentX + 'px', 'important');
-                container.style.setProperty('top', currentY + 'px', 'important');
+                currentDragX = Math.max(minX, Math.min(maxX, initialLeft + dx));
+                currentDragY = Math.max(minY, Math.min(maxY, initialTop + dy));
+
+                container.style.setProperty('left', currentDragX + 'px', 'important');
+                container.style.setProperty('top', currentDragY + 'px', 'important');
                 container.style.setProperty('right', 'auto', 'important');
                 container.style.setProperty('bottom', 'auto', 'important');
             }
@@ -1405,18 +1469,53 @@
             isMouseDown = false;
 
             if (isDragging) {
+                if (!boxRect) {
+                    const chatBox = getChatBox();
+                    boxRect = chatBox ? chatBox.getBoundingClientRect() : document.body.getBoundingClientRect();
+                }
+
+                // Determine target corner based on dragged widget center
+                const centerX = currentDragX + 19;
+                const centerY = currentDragY + 19;
+
+                const isLeft = centerX < (boxRect.width / 2);
+                const isTop = centerY < (boxRect.height / 2);
+                const corner = (isTop ? 't' : 'b') + (isLeft ? 'l' : 'r');
+
+                // Seamless CSS coordinate transition preparation:
+                // Pre-align properties according to destination corner to avoid jump when removing dragging class
+                const currentBottom = Math.max(0, boxRect.height - currentDragY - 38);
+                const currentRight = Math.max(0, boxRect.width - currentDragX - 38);
+
+                if (corner === 'br') {
+                    container.style.setProperty('right', currentRight + 'px', 'important');
+                    container.style.removeProperty('left');
+                    container.style.setProperty('bottom', currentBottom + 'px', 'important');
+                    container.style.removeProperty('top');
+                } else if (corner === 'bl') {
+                    container.style.setProperty('left', currentDragX + 'px', 'important');
+                    container.style.removeProperty('right');
+                    container.style.setProperty('bottom', currentBottom + 'px', 'important');
+                    container.style.removeProperty('top');
+                } else if (corner === 'tr') {
+                    container.style.setProperty('right', currentRight + 'px', 'important');
+                    container.style.removeProperty('left');
+                    container.style.setProperty('top', currentDragY + 'px', 'important');
+                    container.style.removeProperty('bottom');
+                } else if (corner === 'tl') {
+                    container.style.setProperty('left', currentDragX + 'px', 'important');
+                    container.style.removeProperty('right');
+                    container.style.setProperty('top', currentDragY + 'px', 'important');
+                    container.style.removeProperty('bottom');
+                }
+
+                // Force reflow so starting coordinates take effect
+                void container.offsetWidth;
+
+                // Re-enable smooth transitions
                 container.classList.remove('dragging');
 
-                const chatBox = getChatBox();
-                const bRect = chatBox ? chatBox.getBoundingClientRect() : document.body.getBoundingClientRect();
-                const elemRect = container.getBoundingClientRect();
-                const centerX = (elemRect.left + elemRect.right) / 2 - bRect.left;
-                const centerY = (elemRect.top + elemRect.bottom) / 2 - bRect.top;
-
-                const isLeft = centerX < (bRect.width / 2);
-                const isTop = centerY < (bRect.height / 2);
-
-                const corner = (isTop ? 't' : 'b') + (isLeft ? 'l' : 'r');
+                // Animate smoothly to destination corner
                 applyCorner(corner);
 
                 setTimeout(() => { isDragging = false; }, 60);
