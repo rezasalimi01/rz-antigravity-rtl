@@ -30,7 +30,8 @@
   "license": "MIT",
   "files": [
     "bin",
-    "README.md"
+    "README.md",
+    "docs"
   ],
   "dependencies": {
     "@electron/asar": "^4.2.0",
