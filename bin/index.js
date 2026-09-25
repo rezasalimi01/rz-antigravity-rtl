@@ -230,7 +230,8 @@ async function patchDesktop(asarPath) {
         utilsCode = purgePreviousRtlPatchesFromUtils(utilsCode);
 
         const payloadPath = path.join(__dirname, 'payload.js');
-        const payload = fs.readFileSync(payloadPath, 'utf8');
+        let payload = fs.readFileSync(payloadPath, 'utf8');
+        payload = payload.replace(/class="rtl-version-badge">v[^<]*</g, `class="rtl-version-badge">v${pkg.version}<`);
 
         const anchor = 'void win.loadURL(url);';
         if (!utilsCode.includes(anchor)) {
@@ -357,7 +358,9 @@ async function patchIDE(ideAppPath) {
             }
         }
 
-        fs.copyFileSync(idePayloadSource, idePayloadDest);
+        let idePayloadCode = fs.readFileSync(idePayloadSource, 'utf8');
+        idePayloadCode = idePayloadCode.replace(/class="rtl-version-badge">v[^<]*</g, `class="rtl-version-badge">v${pkg.version}<`);
+        fs.writeFileSync(idePayloadDest, idePayloadCode);
         if (fs.existsSync(fontSource)) {
             fs.copyFileSync(fontSource, fontDest);
         }

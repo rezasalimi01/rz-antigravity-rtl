@@ -1,13 +1,13 @@
-# RZ Antigravity RTL & UI Patcher
+# RZ Antigravity RTL — RTL Support for Antigravity Desktop & Antigravity IDE
 
 [![npm version](https://img.shields.io/npm/v/rz-antigravity-rtl.svg?color=D0FE1B&labelColor=000000)](https://www.npmjs.com/package/rz-antigravity-rtl)
 [![npm downloads](https://img.shields.io/npm/dt/rz-antigravity-rtl.svg?color=D0FE1B&labelColor=000000)](https://www.npmjs.com/package/rz-antigravity-rtl)
 [![GitHub](https://img.shields.io/badge/GitHub-rezasalimi01%2Frz--antigravity--rtl-D0FE1B?logo=github&labelColor=000000)](https://github.com/rezasalimi01/rz-antigravity-rtl)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A smart, high-performance, and beautiful RTL (Right-to-Left) engine and UI customizer for both **Antigravity Desktop** and **Antigravity IDE**.
+> **Antigravity RTL & Antigravity IDE RTL**: High-performance Right-to-Left (RTL) engine and typography customizer for both **Antigravity Desktop** and **Antigravity IDE**.
 
-This CLI tool automatically injects a sophisticated RTL engine into Antigravity applications, adding native-feeling typography for Persian (Farsi), Arabic, Hebrew, and other RTL languages, along with a sleek floating UI to configure fonts, line heights, font sizes, and behavior on the fly.
+A smart, automated CLI patcher bringing native-feeling Persian (Farsi), Arabic, Hebrew, and RTL support to Google Antigravity applications. Features 22 curated offline webfonts, strict Monaco code editor isolation, and an interactive floating UI to configure fonts, line heights, font sizes, and behavior on the fly.
 
 ---
 
@@ -99,23 +99,17 @@ For detailed technical explanations, architecture diagrams, and developer guides
 
 ---
 
-## 🙏 Credits & Acknowledgements
+## Credits & Acknowledgements
 
-This project is an advanced fork and evolution of the original [**antigravity-rtl**](https://github.com/mmnaderi/antigravity-rtl) created by [**Mohammad Mehdi Naderi (mmnaderi)**](https://github.com/mmnaderi).
-
-Special thanks to **Mohammad Mehdi Naderi** for the initial concept and foundation. **RZ Antigravity RTL** expands upon the original work by introducing:
-- Full Antigravity IDE workbench integration with zero impact on Monaco editor
-- Bundled 22 curated offline Persian, English, and Code webfonts
-- Complete visual overhaul with Volt Lime (`#D0FE1B`) & obsidian pitch black theme
-- Custom animated spring dropdowns and micro-interaction animations
-- 4-corner snapping strictly bounded to the chat panel viewport
-- Enhanced font normalization and auto-resetting pulse animations
+This project is an advanced fork and evolution of the original [**antigravity-rtl**](https://github.com/mmnaderi/antigravity-rtl) created by [**Mohammad Mehdi Naderi (mmnaderi)**](https://github.com/mmnaderi). Special thanks to the original creator for the initial concept and foundation.
 
 ---
 
 <div dir="rtl">
 
-# ابزار هوشمند راست‌به‌چپ RZ Antigravity RTL
+# ابزار هوشمند RZ Antigravity RTL — پشتیبانی راست‌به‌چپ برای Antigravity Desktop و Antigravity IDE
+
+> **پشتیبانی کامل از Antigravity RTL و Antigravity IDE RTL**: موتور هوشمند راست‌به‌چپ و شخصی‌سازی تایپوگرافی برای هر دو نسخه دسکتاپ و محیط توسعه (IDE).
 
 یک پچِ هوشمند، بسیار سریع و زیبا برای پشتیبانی کامل از زبان‌های راست‌به‌چپ (RTL) در هر دو برنامهٔ **Antigravity Desktop** و **Antigravity IDE**.
 
@@ -173,11 +167,9 @@ npx rz-antigravity-rtl --app --restore
 
 ---
 
-## 💖 قدردانی و سورس اصلی (Credits)
+## قدردانی و سورس اصلی (Credits)
 
-این پروژه نسخه ارتقایافته، بازطراحی‌شده و توسعه‌یافته بر پایه سورس ارزشمند [**antigravity-rtl**](https://github.com/mmnaderi/antigravity-rtl) اثر **محمد مهدی نادری (mmnaderi)** عزیز است.
-
-با تشکر صمیمانه از **مهدی نادری** بابت ایده و پیاده‌سازی زیرساخت اولیه. در نسخه **RZ Antigravity RTL** قابلیت‌های متعددی از جمله پشتیبانی کامل از Antigravity IDE، ایزولاسیون کامل ادیتور کد Monaco، پالت رنگی مدرن نئون لایم (#D0FE1B)، دراپ‌داون‌های انیمیشنی فنری، ۲۲ فونت آفلاین و اسنپ هوشمند به ۴ گوشه اضافه شده است.
+این پروژه بر پایه سورس اولیه [**antigravity-rtl**](https://github.com/mmnaderi/antigravity-rtl) اثر **محمد مهدی نادری (mmnaderi)** بازطراحی و توسعه یافته است. با تشکر از ایشان بابت ایده و زیرساخت ابتدایی این ابزار.
 
 ---
 

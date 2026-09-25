@@ -260,6 +260,20 @@ win.webContents.on('dom-ready', () => {
                         color: #D0FE1B !important;
                         letter-spacing: 0.4px !important;
                         text-shadow: 0 0 10px rgba(208, 254, 27, 0.3) !important;
+                        white-space: nowrap !important;
+                    }
+                    .rtl-version-badge {
+                        font-size: 10px !important;
+                        font-weight: 500 !important;
+                        color: #9ca3af !important;
+                        background-color: rgba(255, 255, 255, 0.08) !important;
+                        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+                        border-radius: 5px !important;
+                        padding: 1px 5px !important;
+                        letter-spacing: 0.2px !important;
+                        line-height: 1.2 !important;
+                        text-shadow: none !important;
+                        user-select: none !important;
                     }
                     .rtl-row {
                         position: relative !important;
@@ -791,6 +805,7 @@ win.webContents.on('dom-ready', () => {
                     <div class="rtl-panel-header">
                         <svg height="14" width="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h6m-6-4h16m-6 8h6M4 6h16"/></svg>
                         <span>RZ Antigravity RTL</span>
+                        <span class="rtl-version-badge">v1.1.3</span>
                     </div>
                     
                     <!-- Toggle -->
