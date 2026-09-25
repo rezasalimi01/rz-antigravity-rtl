@@ -1,5 +1,9 @@
 # RZ Antigravity RTL — RTL Support for Antigravity Desktop & Antigravity IDE
 
+<p align="center">
+  <img src="banner.png" alt="RZ Antigravity RTL — RTL Support for Antigravity Desktop & Antigravity IDE" width="100%">
+</p>
+
 [![npm version](https://img.shields.io/npm/v/rz-antigravity-rtl.svg?color=D0FE1B&labelColor=000000)](https://www.npmjs.com/package/rz-antigravity-rtl)
 [![npm downloads](https://img.shields.io/npm/dt/rz-antigravity-rtl.svg?color=D0FE1B&labelColor=000000)](https://www.npmjs.com/package/rz-antigravity-rtl)
 [![GitHub](https://img.shields.io/badge/GitHub-rezasalimi01%2Frz--antigravity--rtl-D0FE1B?logo=github&labelColor=000000)](https://github.com/rezasalimi01/rz-antigravity-rtl)
