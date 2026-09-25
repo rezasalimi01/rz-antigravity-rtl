@@ -17,6 +17,32 @@ const { blue, cyan, green, red, yellow, bold, dim } = picocolors;
 const pkgPath = path.join(__dirname, '..', 'package.json');
 const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
 
+// Automatically keep payload source files in sync with package.json version
+function syncVersionToPayloads() {
+    try {
+        const targetBadge = `class="rtl-version-badge">v${pkg.version}<`;
+        const payloadPath = path.join(__dirname, 'payload.js');
+        const idePayloadPath = path.join(__dirname, 'ide-payload.js');
+
+        if (fs.existsSync(payloadPath)) {
+            let content = fs.readFileSync(payloadPath, 'utf8');
+            let updated = content.replace(/class="rtl-version-badge">v[^<]*</g, targetBadge);
+            if (updated !== content) {
+                fs.writeFileSync(payloadPath, updated, 'utf8');
+            }
+        }
+
+        if (fs.existsSync(idePayloadPath)) {
+            let content = fs.readFileSync(idePayloadPath, 'utf8');
+            let updated = content.replace(/class="rtl-version-badge">v[^<]*</g, targetBadge);
+            if (updated !== content) {
+                fs.writeFileSync(idePayloadPath, updated, 'utf8');
+            }
+        }
+    } catch (e) {}
+}
+syncVersionToPayloads();
+
 function printBanner() {
     try {
         const fullArt = figlet.textSync('RZ Antigravity RTL', { font: 'RubiFont' }).split('\n');

@@ -90,6 +90,7 @@
             /* Trigger Button */
             .rtl-widget-trigger {
                 position: relative !important;
+                z-index: 10 !important;
                 width: 38px !important;
                 height: 38px !important;
                 display: flex !important;
@@ -100,49 +101,69 @@
                 border: 1.5px solid #27272a !important;
                 color: #9ca3af !important;
                 cursor: grab !important;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.75) !important;
+                box-shadow: 0 4px 14px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05) !important;
                 user-select: none !important;
                 -webkit-user-drag: none !important;
                 touch-action: none !important;
-                transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease !important;
+                transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease !important;
             }
-
             .rtl-widget-trigger:hover {
                 transform: scale(1.1) !important;
                 border-color: #D0FE1B !important;
                 color: #D0FE1B !important;
-                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.9), 0 0 16px rgba(208, 254, 27, 0.45) !important;
+                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.9), 0 0 18px rgba(208, 254, 27, 0.45) !important;
             }
 
-            .rtl-widget-container.open .rtl-widget-trigger {
+            .rtl-widget-trigger:active {
+                cursor: pointer !important;
+                transform: scale(0.94) !important;
+            }
+
+            .rtl-widget-container.open .rtl-widget-trigger,
+            .rtl-widget-container.open .rtl-widget-trigger:hover,
+            .rtl-widget-container.open .rtl-widget-trigger:focus {
+                cursor: pointer !important;
                 background-color: #D0FE1B !important;
                 border-color: #D0FE1B !important;
                 color: #000000 !important;
-                box-shadow: 0 0 20px rgba(208, 254, 27, 0.7) !important;
+                box-shadow: 0 0 24px rgba(208, 254, 27, 0.75), 0 4px 14px rgba(0, 0, 0, 0.6) !important;
+                transform: scale(1.1) !important;
+                z-index: 10 !important;
             }
 
+            .rtl-widget-container.open .rtl-widget-trigger:active {
+                cursor: pointer !important;
+                transform: scale(1.04) !important;
+            }
+
+            .rtl-widget-container.dragging,
             .rtl-widget-container.dragging .rtl-widget-trigger {
                 cursor: grabbing !important;
-                transform: scale(1.12) !important;
+                transform: scale(1.14) !important;
                 border-color: #D0FE1B !important;
                 color: #D0FE1B !important;
-                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.95), 0 0 20px rgba(208, 254, 27, 0.6) !important;
+                box-shadow: 0 10px 28px rgba(0, 0, 0, 0.95), 0 0 24px rgba(208, 254, 27, 0.65) !important;
             }
 
             /* Settings Panel */
             .rtl-widget-panel {
                 position: absolute !important;
-                width: 254px !important;
-                background-color: #050505 !important;
+                z-index: 5 !important;
+                width: 256px !important;
+                background: rgba(8, 8, 10, 0.94) !important;
+                backdrop-filter: blur(24px) saturate(190%) !important;
+                -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
                 color: #ffffff !important;
                 border: 1px solid rgba(208, 254, 27, 0.22) !important;
                 border-radius: 16px !important;
                 padding: 13px 14px !important;
-                box-shadow: 0 16px 40px rgba(0, 0, 0, 0.95), 0 0 20px rgba(208, 254, 27, 0.12) !important;
-                transform: scale(0.85) translateY(10px) !important;
+                box-shadow: 0 28px 56px -10px rgba(0, 0, 0, 0.96), 0 16px 32px -6px rgba(0, 0, 0, 0.86), 0 0 25px rgba(208, 254, 27, 0.12), inset 0 1px 1px rgba(255, 255, 255, 0.1) !important;
+                transform: scale(0.82) translateY(14px) !important;
                 opacity: 0 !important;
+                filter: blur(8px) !important;
                 pointer-events: none !important;
-                transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+                will-change: transform, opacity, filter !important;
+                transition: opacity 0.2s cubic-bezier(0.4, 0, 1, 1), transform 0.24s cubic-bezier(0.4, 0, 0.2, 1), filter 0.2s ease !important;
             }
 
             /* Smart Popover Alignment */
@@ -152,6 +173,7 @@
                 top: auto !important;
                 left: auto !important;
                 transform-origin: bottom right !important;
+                transform: scale(0.82) translate(10px, 14px) !important;
             }
             .rtl-widget-container.corner-bl .rtl-widget-panel {
                 bottom: 48px !important;
@@ -159,6 +181,7 @@
                 top: auto !important;
                 right: auto !important;
                 transform-origin: bottom left !important;
+                transform: scale(0.82) translate(-10px, 14px) !important;
             }
             .rtl-widget-container.corner-tr .rtl-widget-panel {
                 top: 48px !important;
@@ -166,6 +189,7 @@
                 bottom: auto !important;
                 left: auto !important;
                 transform-origin: top right !important;
+                transform: scale(0.82) translate(10px, -14px) !important;
             }
             .rtl-widget-container.corner-tl .rtl-widget-panel {
                 top: 48px !important;
@@ -173,13 +197,16 @@
                 bottom: auto !important;
                 right: auto !important;
                 transform-origin: top left !important;
+                transform: scale(0.82) translate(-10px, -14px) !important;
             }
 
             /* Open State Animation */
             .rtl-widget-container.open .rtl-widget-panel {
-                transform: scale(1) translateY(0) !important;
+                transform: scale(1) translate(0, 0) !important;
                 opacity: 1 !important;
+                filter: blur(0px) !important;
                 pointer-events: auto !important;
+                transition: opacity 0.32s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.34, 1.45, 0.64, 1), filter 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
             }
 
             .rtl-panel-header {
@@ -228,25 +255,53 @@
                 white-space: nowrap !important;
             }
 
-            /* Animated Sliders & Number Badges */
+            /* Animated Sliders & Number Badges with Counter Effect */
             .rtl-slider-val {
                 font-weight: 500 !important;
                 color: #D0FE1B !important;
                 font-size: 11px !important;
-                min-width: 32px !important;
+                min-width: 34px !important;
+                height: 18px !important;
                 text-align: center !important;
                 background: rgba(208, 254, 27, 0.1) !important;
                 border: 1px solid rgba(208, 254, 27, 0.28) !important;
                 border-radius: 5px !important;
-                padding: 1px 4px !important;
+                padding: 0 4px !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                overflow: hidden !important;
+                position: relative !important;
                 transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease, box-shadow 0.2s ease !important;
-                display: inline-block !important;
             }
 
             .rtl-slider-val.val-pop {
                 transform: scale(1.18) !important;
                 background: rgba(208, 254, 27, 0.25) !important;
                 box-shadow: 0 0 10px rgba(208, 254, 27, 0.45) !important;
+            }
+
+            .rtl-val-text {
+                display: inline-block !important;
+                line-height: 1 !important;
+            }
+
+            .rtl-val-text.slide-up {
+                animation: rtlValSlideUp 0.16s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+            }
+
+            .rtl-val-text.slide-down {
+                animation: rtlValSlideDown 0.16s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+            }
+
+            @keyframes rtlValSlideUp {
+                0% { transform: translateY(7px); opacity: 0.2; }
+                100% { transform: translateY(0); opacity: 1; }
+            }
+
+            @keyframes rtlValSlideDown {
+                0% { transform: translateY(-7px); opacity: 0.2; }
+                100% { transform: translateY(0); opacity: 1; }
             }
 
             /* Custom Animated Dropdown */
@@ -443,6 +498,53 @@
                 height: 1px !important;
                 background-color: rgba(255, 255, 255, 0.08) !important;
                 margin: 6px 0 !important;
+            }
+
+            .rtl-reset-btn {
+                background: none !important;
+                border: none !important;
+                outline: none !important;
+                box-shadow: none !important;
+                cursor: pointer !important;
+                opacity: 0.65 !important;
+                color: #71717a !important;
+                padding: 2px !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                transition: opacity 0.2s ease, color 0.2s ease !important;
+                -webkit-tap-highlight-color: transparent !important;
+            }
+            .rtl-reset-btn:focus,
+            .rtl-reset-btn:focus-visible {
+                outline: none !important;
+                box-shadow: none !important;
+                border: none !important;
+            }
+            .rtl-reset-btn:hover {
+                opacity: 1 !important;
+                color: #D0FE1B !important;
+                outline: none !important;
+                box-shadow: none !important;
+            }
+            .rtl-reset-btn:active {
+                opacity: 1 !important;
+                color: #D0FE1B !important;
+                outline: none !important;
+                box-shadow: none !important;
+            }
+            .rtl-reset-btn svg {
+                display: block !important;
+                transform-origin: center center !important;
+            }
+            .rtl-reset-btn.recoiling svg {
+                animation: rtlResetRecoil 0.42s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+            }
+            @keyframes rtlResetRecoil {
+                0% { transform: rotate(0deg); }
+                55% { transform: rotate(-180deg); }
+                80% { transform: rotate(12deg); }
+                100% { transform: rotate(0deg); }
             }
 
             .rtl-github-link {
@@ -1138,7 +1240,7 @@
                             <path d="M4 14h6m-6-4h16m-6 8h6M4 6h16"/>
                         </svg>
                         <span>RZ Antigravity RTL</span>
-                        <span class="rtl-version-badge">v1.1.3</span>
+                        <span class="rtl-version-badge">v1.1.4</span>
                     </div>
 
                     <!-- Enabled Toggle -->
@@ -1234,10 +1336,10 @@
                         <!-- Line Height Slider + Animated Value + Reset -->
                         <div class="rtl-row">
                             <span class="rtl-label" title="Chat Line Height">Line Height</span>
-                            <div style="display: flex; align-items: center; gap: 5px;">
-                                <input id="rtl-lh-input" type="range" min="1.2" max="2.5" step="0.1" value="${rtlConfig.lh || '1.6'}" style="width: 70px; cursor: pointer; accent-color: #D0FE1B;">
-                                <span id="rtl-lh-val" class="rtl-slider-val">${rtlConfig.lh || '1.6'}</span>
-                                <button id="rtl-lh-reset" type="button" style="background: none; border: none; cursor: pointer; opacity: 0.65; color: inherit; padding: 2px;" title="Reset to 1.6">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <input id="rtl-lh-input" type="range" min="1.2" max="2.5" step="0.1" value="${rtlConfig.lh || '1.6'}" style="width: 82px; cursor: pointer; accent-color: #D0FE1B; margin-right: 6px;">
+                                <span id="rtl-lh-val" class="rtl-slider-val"><span class="rtl-val-text">${rtlConfig.lh || '1.6'}</span></span>
+                                <button id="rtl-lh-reset" type="button" class="rtl-reset-btn" title="Reset to 1.6">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
                                 </button>
                             </div>
@@ -1246,10 +1348,10 @@
                         <!-- Font Size Slider + Animated Value + Reset -->
                         <div class="rtl-row">
                             <span class="rtl-label" title="Chat Font Size">Font Size</span>
-                            <div style="display: flex; align-items: center; gap: 5px;">
-                                <input id="rtl-fs-input" type="range" min="11" max="22" step="1" value="${rtlConfig.fs || '14'}" style="width: 70px; cursor: pointer; accent-color: #D0FE1B;">
-                                <span id="rtl-fs-val" class="rtl-slider-val">${rtlConfig.fs || '14'}px</span>
-                                <button id="rtl-fs-reset" type="button" style="background: none; border: none; cursor: pointer; opacity: 0.65; color: inherit; padding: 2px;" title="Reset to 14px">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <input id="rtl-fs-input" type="range" min="11" max="22" step="1" value="${rtlConfig.fs || '14'}" style="width: 82px; cursor: pointer; accent-color: #D0FE1B; margin-right: 6px;">
+                                <span id="rtl-fs-val" class="rtl-slider-val"><span class="rtl-val-text">${rtlConfig.fs || '14'}px</span></span>
+                                <button id="rtl-fs-reset" type="button" class="rtl-reset-btn" title="Reset to 14px">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
                                 </button>
                             </div>
@@ -1414,6 +1516,7 @@
         // Smart Dragging STRICTLY CONFINED TO CHAT BOX
         let isMouseDown = false;
         let isDragging = false;
+        let wasOpenOnMouseDown = false;
         let startX = 0, startY = 0;
         let initialLeft = 0, initialTop = 0;
         let currentDragX = 0, currentDragY = 0;
@@ -1424,21 +1527,24 @@
             e.preventDefault();
             isMouseDown = true;
             isDragging = false;
+            wasOpenOnMouseDown = container.classList.contains('open');
             startX = e.clientX;
             startY = e.clientY;
 
-            const chatBox = getChatBox();
-            boxRect = chatBox ? chatBox.getBoundingClientRect() : document.body.getBoundingClientRect();
-            const elemRect = container.getBoundingClientRect();
+            if (!wasOpenOnMouseDown) {
+                const chatBox = getChatBox();
+                boxRect = chatBox ? chatBox.getBoundingClientRect() : document.body.getBoundingClientRect();
+                const elemRect = container.getBoundingClientRect();
 
-            initialLeft = elemRect.left - boxRect.left;
-            initialTop = elemRect.top - boxRect.top;
-            currentDragX = initialLeft;
-            currentDragY = initialTop;
+                initialLeft = elemRect.left - boxRect.left;
+                initialTop = elemRect.top - boxRect.top;
+                currentDragX = initialLeft;
+                currentDragY = initialTop;
+            }
         });
 
         window.addEventListener('mousemove', (e) => {
-            if (!isMouseDown) return;
+            if (!isMouseDown || wasOpenOnMouseDown) return;
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
 
@@ -1482,6 +1588,15 @@
         window.addEventListener('mouseup', (e) => {
             if (!isMouseDown) return;
             isMouseDown = false;
+
+            if (wasOpenOnMouseDown) {
+                e.stopPropagation();
+                container.classList.remove('open');
+                document.querySelectorAll('.rtl-dropdown.open').forEach(d => d.classList.remove('open'));
+                wasOpenOnMouseDown = false;
+                boxRect = null;
+                return;
+            }
 
             if (isDragging) {
                 if (!boxRect) {
@@ -1618,38 +1733,101 @@
         };
 
         let popTimeouts = new WeakMap();
-        function triggerValPop(el, text) {
-            el.textContent = text;
-            el.classList.add('val-pop');
-            if (popTimeouts.has(el)) {
-                clearTimeout(popTimeouts.get(el));
+        let prevValues = new WeakMap();
+        prevValues.set(lhVal, parseFloat(lhInput.value) || 1.6);
+        prevValues.set(fsVal, parseFloat(fsInput.value) || 14);
+
+        function updateValBadge(badgeEl, text, numVal) {
+            let textSpan = badgeEl.querySelector('.rtl-val-text');
+            if (!textSpan) {
+                badgeEl.innerHTML = '<span class="rtl-val-text">' + text + '</span>';
+                textSpan = badgeEl.querySelector('.rtl-val-text');
+            } else {
+                const prev = prevValues.has(badgeEl) ? prevValues.get(badgeEl) : numVal;
+                textSpan.classList.remove('slide-up', 'slide-down');
+                void textSpan.offsetWidth;
+                if (numVal > prev) {
+                    textSpan.classList.add('slide-up');
+                } else if (numVal < prev) {
+                    textSpan.classList.add('slide-down');
+                }
+                textSpan.textContent = text;
+            }
+            prevValues.set(badgeEl, numVal);
+
+            badgeEl.classList.add('val-pop');
+            if (popTimeouts.has(badgeEl)) {
+                clearTimeout(popTimeouts.get(badgeEl));
             }
             const t = setTimeout(() => {
-                el.classList.remove('val-pop');
-            }, 300);
-            popTimeouts.set(el, t);
+                badgeEl.classList.remove('val-pop');
+            }, 220);
+            popTimeouts.set(badgeEl, t);
+        }
+
+        function animateCounter(inputEl, badgeEl, targetVal, isFloat, suffix, onDone) {
+            let current = parseFloat(inputEl.value);
+            const target = parseFloat(targetVal);
+            if (isNaN(current) || current === target) {
+                inputEl.value = targetVal;
+                updateValBadge(badgeEl, targetVal + suffix, target);
+                if (onDone) onDone();
+                return;
+            }
+
+            const step = isFloat ? 0.1 : 1;
+            const direction = target > current ? 1 : -1;
+
+            function tick() {
+                if ((direction === 1 && current < target) || (direction === -1 && current > target)) {
+                    current = Math.round((current + direction * step) * 10) / 10;
+                    if ((direction === 1 && current > target) || (direction === -1 && current < target)) {
+                        current = target;
+                    }
+                    const displayVal = isFloat ? current.toFixed(1) : String(Math.round(current));
+                    inputEl.value = displayVal;
+                    updateValBadge(badgeEl, displayVal + suffix, current);
+                    if (current !== target) {
+                        setTimeout(tick, 30);
+                    } else {
+                        if (onDone) onDone();
+                    }
+                }
+            }
+            tick();
+        }
+
+        function triggerResetRecoil(btn) {
+            btn.classList.remove('recoiling');
+            void btn.offsetWidth;
+            btn.classList.add('recoiling');
+            setTimeout(() => {
+                btn.classList.remove('recoiling');
+            }, 450);
         }
 
         lhInput.addEventListener('input', () => {
-            triggerValPop(lhVal, lhInput.value);
+            updateValBadge(lhVal, lhInput.value, parseFloat(lhInput.value));
             onFontChange();
         });
 
         fsInput.addEventListener('input', () => {
-            triggerValPop(fsVal, fsInput.value + 'px');
+            updateValBadge(fsVal, fsInput.value + 'px', parseFloat(fsInput.value));
             onFontChange();
         });
 
         lhResetBtn.addEventListener('click', () => {
-            lhInput.value = '1.6';
-            triggerValPop(lhVal, '1.6');
-            onFontChange();
+            triggerResetRecoil(lhResetBtn);
+            animateCounter(lhInput, lhVal, '1.6', true, '', () => {
+                onFontChange();
+            });
         });
 
         fsResetBtn.addEventListener('click', () => {
-            fsInput.value = '14';
-            triggerValPop(fsVal, '14px');
-            onFontChange();
+            triggerResetRecoil(fsResetBtn);
+            animateCounter(fsInput, fsVal, '14', false, 'px', () => {
+                onFontChange();
+            });
         });
     }
 
