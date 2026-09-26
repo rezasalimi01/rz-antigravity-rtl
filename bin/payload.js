@@ -64,7 +64,7 @@ win.webContents.on('dom-ready', () => {
         }
 
         // Read config
-        let rtlConfig = { faFont: '', enFont: '', codeFont: '', lh: '1.6', fs: '14', isRTL: true, forceRTL: false, fixAtSign: true };
+        let rtlConfig = { faFont: '', enFont: '', codeFont: '', lh: '1.7', fs: '15', isRTL: true, forceRTL: false, fixAtSign: true };
         try {
             const configPath = require('path').join(require('os').homedir(), '.antigravity-rtl.json');
             if (require('fs').existsSync(configPath)) {
@@ -81,8 +81,30 @@ win.webContents.on('dom-ready', () => {
 
         // Unified injection for RTL Toggle, CSS, and JS
         win.webContents.executeJavaScript(`
-            const fontBase64 = '${fontBase64}';
-            const fontsB64 = ${JSON.stringify(fontsB64)};
+            (function() {
+                if (window.__RZ_ANTIGRAVITY_RTL_LOADED__) return;
+                window.__RZ_ANTIGRAVITY_RTL_LOADED__ = true;
+
+                // 🛡️ True App-Ready Guard: ensures React mounted the UI shell before touching DOM
+                function isAntigravityReady() {
+                    try {
+                        if (!document || !document.body) return false;
+                        const root = document.getElementById('root');
+                        if (!root || !root.children || root.children.length === 0) return false;
+                        return Boolean(document.querySelector('[role="navigation"]') || 
+                                       document.querySelector('[role="main"]') || 
+                                       document.querySelector('[contenteditable="true"]') ||
+                                       document.querySelector('[data-testid="conversation-view"]') ||
+                                       document.querySelector('[data-testid="open-ide"]') ||
+                                       document.querySelector('[data-testid="install-editor"]'));
+                    } catch (_) {
+                        return false;
+                    }
+                }
+
+                function init() {
+                    const fontBase64 = '${fontBase64}';
+                    const fontsB64 = ${JSON.stringify(fontsB64)};
             let rtlConfig = ${JSON.stringify(rtlConfig)};
             
             function normalizeFont(val) {
@@ -107,199 +129,173 @@ win.webContents.on('dom-ready', () => {
             let isRTL = rtlConfig.isRTL;
             let forceRTL = rtlConfig.forceRTL || false;
             let fixAtSign = rtlConfig.fixAtSign !== false;
-            let currentCorner = localStorage.getItem('rz-widget-corner') || 'br';
-            
             // Permanent widget styles (#D0FE1B Volt on #000000 Pitch Black)
             if (!document.getElementById('rtl-widget-style')) {
                 let widgetStyle = document.createElement('style');
                 widgetStyle.id = 'rtl-widget-style';
                 widgetStyle.textContent = \`
-                    .rtl-widget-container {
-                        position: absolute !important;
-                        width: 38px !important;
-                        height: 38px !important;
-                        direction: ltr !important;
-                        z-index: 2147483647 !important;
-                        overflow: visible !important;
-                        user-select: none !important;
-                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-                        transition: transform 0.2s ease, left 0.3s cubic-bezier(0.16, 1, 0.3, 1), top 0.3s cubic-bezier(0.16, 1, 0.3, 1), right 0.3s cubic-bezier(0.16, 1, 0.3, 1), bottom 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
-                    }
-
-                    .rtl-widget-container.dragging {
-                        transition: none !important;
-                        cursor: grabbing !important;
-                        right: auto !important;
-                        bottom: auto !important;
-                    }
-
-                    /* 4 Corners */
-                    .rtl-widget-container.corner-br {
-                        right: 18px !important;
-                        bottom: 18px !important;
-                        left: auto !important;
-                        top: auto !important;
-                    }
-                    .rtl-widget-container.corner-bl {
-                        left: 18px !important;
-                        bottom: 18px !important;
-                        right: auto !important;
-                        top: auto !important;
-                    }
-                    .rtl-widget-container.corner-tr {
-                        right: 18px !important;
-                        top: 18px !important;
-                        left: auto !important;
-                        bottom: auto !important;
-                    }
-                    .rtl-widget-container.corner-tl {
-                        left: 18px !important;
-                        top: 18px !important;
-                        right: auto !important;
-                        bottom: auto !important;
-                    }
-
-                    .rtl-widget-trigger {
+                    /* Topbar Button Styling */
+                    .rtl-topbar-wrapper {
+                        display: inline-flex !important;
+                        align-items: center !important;
                         position: relative !important;
-                        z-index: 10 !important;
-                        width: 38px !important;
-                        height: 38px !important;
-                        display: flex !important;
+                        app-region: no-drag !important;
+                        -webkit-app-region: no-drag !important;
+                        margin: 0 4px !important;
+                    }
+
+                    /* Topbar Button Base (Matching Open IDE / Install IDE button) */
+                    #rtl-topbar-btn,
+                    .rtl-topbar-btn {
+                        display: inline-flex !important;
                         align-items: center !important;
                         justify-content: center !important;
-                        border-radius: 50% !important;
-                        background-color: #000000 !important;
-                        border: 1.5px solid #27272a !important;
-                        color: #9ca3af !important;
-                        cursor: grab !important;
-                        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05) !important;
+                        height: 28px !important;
+                        padding: 0 10px !important;
+                        gap: 6px !important;
+                        font-size: 13.5px !important;
+                        font-weight: 500 !important;
+                        line-height: 1 !important;
+                        border-radius: 6px !important;
+                        border: 1px solid var(--border, rgba(255, 255, 255, 0.12)) !important;
+                        background-color: transparent !important;
+                        color: var(--secondary-foreground, #a1a1aa) !important;
+                        cursor: pointer !important;
+                        outline: none !important;
                         user-select: none !important;
-                        -webkit-user-drag: none !important;
-                        touch-action: none !important;
-                        transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease !important;
+                        white-space: nowrap !important;
+                        transition: all 0.16s ease !important;
+                        font-family: inherit !important;
+                        box-sizing: border-box !important;
+                        app-region: no-drag !important;
+                        -webkit-app-region: no-drag !important;
                     }
-                    .rtl-widget-trigger:hover {
-                        transform: scale(1.1) !important;
-                        border-color: #D0FE1B !important;
+
+                    #rtl-topbar-btn #rtl-topbar-text,
+                    .rtl-topbar-btn #rtl-topbar-text {
+                        color: inherit !important;
+                        font-weight: 500 !important;
+                        transition: color 0.16s ease, text-shadow 0.16s ease !important;
+                    }
+
+                    #rtl-topbar-btn svg,
+                    .rtl-topbar-btn svg {
+                        color: inherit !important;
+                        stroke: currentColor !important;
+                        transition: stroke 0.16s ease, filter 0.16s ease !important;
+                    }
+
+                    /* Default Inactive Hover */
+                    #rtl-topbar-btn:not(.active):hover,
+                    .rtl-topbar-btn:not(.active):hover {
+                        background-color: var(--secondary, rgba(255, 255, 255, 0.08)) !important;
+                        color: var(--foreground, #ffffff) !important;
+                        border-color: var(--border, rgba(255, 255, 255, 0.2)) !important;
+                    }
+
+                    /* Active State: text and icon turn to Volt primary neon green (#D0FE1B) */
+                    #rtl-topbar-btn.active,
+                    .rtl-topbar-btn.active {
+                        border-color: rgba(208, 254, 27, 0.45) !important;
+                        background-color: rgba(208, 254, 27, 0.08) !important;
                         color: #D0FE1B !important;
-                        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.9), 0 0 18px rgba(208, 254, 27, 0.45) !important;
                     }
-                    .rtl-widget-trigger:active {
-                        cursor: pointer !important;
-                        transform: scale(0.94) !important;
-                    }
-                    .rtl-widget-container.open .rtl-widget-trigger,
-                    .rtl-widget-container.open .rtl-widget-trigger:hover,
-                    .rtl-widget-container.open .rtl-widget-trigger:focus {
-                        cursor: pointer !important;
-                        background-color: #D0FE1B !important;
-                        border-color: #D0FE1B !important;
-                        color: #000000 !important;
-                        box-shadow: 0 0 24px rgba(208, 254, 27, 0.75), 0 4px 14px rgba(0, 0, 0, 0.6) !important;
-                        transform: scale(1.1) !important;
-                        z-index: 10 !important;
-                    }
-                    .rtl-widget-container.open .rtl-widget-trigger:active {
-                        cursor: pointer !important;
-                        transform: scale(1.04) !important;
-                    }
-                    .rtl-widget-container.dragging,
-                    .rtl-widget-container.dragging .rtl-widget-trigger {
-                        cursor: grabbing !important;
-                        transform: scale(1.14) !important;
-                        border-color: #D0FE1B !important;
+
+                    #rtl-topbar-btn.active:hover,
+                    .rtl-topbar-btn.active:hover {
+                        background-color: rgba(208, 254, 27, 0.15) !important;
+                        border-color: rgba(208, 254, 27, 0.6) !important;
                         color: #D0FE1B !important;
-                        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.95), 0 0 24px rgba(208, 254, 27, 0.65) !important;
                     }
-                    .rtl-widget-panel {
-                        position: absolute !important;
-                        z-index: 5 !important;
+
+                    #rtl-topbar-btn.active #rtl-topbar-text,
+                    .rtl-topbar-btn.active #rtl-topbar-text {
+                        color: #D0FE1B !important;
+                        font-weight: 600 !important;
+                        text-shadow: 0 0 10px rgba(208, 254, 27, 0.35) !important;
+                    }
+
+                    #rtl-topbar-btn.active svg,
+                    .rtl-topbar-btn.active svg {
+                        stroke: #D0FE1B !important;
+                        color: #D0FE1B !important;
+                        filter: drop-shadow(0 0 6px rgba(208, 254, 27, 0.4)) !important;
+                    }
+
+                    /* Panel Open State */
+                    #rtl-topbar-btn.panel-open:not(.active),
+                    .rtl-topbar-btn.panel-open:not(.active) {
+                        background-color: var(--secondary, rgba(255, 255, 255, 0.12)) !important;
+                        color: var(--foreground, #ffffff) !important;
+                    }
+
+                    /* Portaled Obsidian & Volt Panel */
+                    #rtl-widget-panel-portal {
+                        position: fixed !important;
+                        z-index: 2147483647 !important;
                         width: 256px !important;
-                        background: rgba(8, 8, 10, 0.94) !important;
+                        box-sizing: border-box !important;
+                        background: rgba(8, 8, 10, 0.95) !important;
                         backdrop-filter: blur(24px) saturate(190%) !important;
                         -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
                         color: #ffffff !important;
-                        border: 1px solid rgba(208, 254, 27, 0.22) !important;
+                        border: 1px solid rgba(208, 254, 27, 0.25) !important;
                         border-radius: 16px !important;
                         padding: 13px 14px !important;
                         box-shadow: 0 28px 56px -10px rgba(0, 0, 0, 0.96), 0 16px 32px -6px rgba(0, 0, 0, 0.86), 0 0 25px rgba(208, 254, 27, 0.12), inset 0 1px 1px rgba(255, 255, 255, 0.1) !important;
-                        transform: scale(0.82) translateY(14px) !important;
+                        transform-origin: top right !important;
+                        transform: scale(0.85) translateY(-8px) !important;
                         opacity: 0 !important;
                         filter: blur(8px) !important;
                         pointer-events: none !important;
                         will-change: transform, opacity, filter !important;
-                        transition: opacity 0.2s cubic-bezier(0.4, 0, 1, 1), transform 0.24s cubic-bezier(0.4, 0, 0.2, 1), filter 0.2s ease !important;
-                    }
-                    
-                    /* Corner Alignment & Directional Origin for Panel */
-                    .rtl-widget-container.corner-br .rtl-widget-panel {
-                        bottom: 48px !important;
-                        right: 0 !important;
-                        top: auto !important;
-                        left: auto !important;
-                        transform-origin: bottom right !important;
-                        transform: scale(0.82) translate(10px, 14px) !important;
-                    }
-                    .rtl-widget-container.corner-bl .rtl-widget-panel {
-                        bottom: 48px !important;
-                        left: 0 !important;
-                        top: auto !important;
-                        right: auto !important;
-                        transform-origin: bottom left !important;
-                        transform: scale(0.82) translate(-10px, 14px) !important;
-                    }
-                    .rtl-widget-container.corner-tr .rtl-widget-panel {
-                        top: 48px !important;
-                        right: 0 !important;
-                        bottom: auto !important;
-                        left: auto !important;
-                        transform-origin: top right !important;
-                        transform: scale(0.82) translate(10px, -14px) !important;
-                    }
-                    .rtl-widget-container.corner-tl .rtl-widget-panel {
-                        top: 48px !important;
-                        left: 0 !important;
-                        bottom: auto !important;
-                        right: auto !important;
-                        transform-origin: top left !important;
-                        transform: scale(0.82) translate(-10px, -14px) !important;
+                        transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.24s cubic-bezier(0.34, 1.45, 0.64, 1), filter 0.2s ease !important;
+                        user-select: none !important;
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+                        direction: ltr !important;
+                        color-scheme: dark !important;
                     }
 
-                    .rtl-widget-container.open .rtl-widget-panel {
-                        transform: scale(1) translate(0, 0) !important;
+                    #rtl-widget-panel-portal.open {
+                        transform: scale(1) translateY(0) !important;
                         opacity: 1 !important;
                         filter: blur(0px) !important;
                         pointer-events: auto !important;
-                        transition: opacity 0.32s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.34, 1.45, 0.64, 1), filter 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
                     }
                     .rtl-panel-header {
-                        text-align: center !important;
-                        font-weight: 600 !important;
-                        font-size: 13px !important;
-                        padding-bottom: 9px !important;
-                        margin-bottom: 9px !important;
-                        border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
                         display: flex !important;
-                        justify-content: center !important;
                         align-items: center !important;
-                        gap: 7px !important;
-                        color: #D0FE1B !important;
-                        letter-spacing: 0.4px !important;
-                        text-shadow: 0 0 10px rgba(208, 254, 27, 0.3) !important;
+                        justify-content: space-between !important;
+                        padding-bottom: 4px !important;
+                        margin-bottom: 0 !important;
+                        border-bottom: none !important;
+                        user-select: none !important;
+                    }
+                    .rtl-header-title {
+                        font-size: 11px !important;
+                        font-weight: 600 !important;
+                        text-transform: uppercase !important;
+                        letter-spacing: 0.06em !important;
+                        color: var(--muted-foreground, #a1a1aa) !important;
+                        line-height: 1.2 !important;
                         white-space: nowrap !important;
                     }
-                    .rtl-version-badge {
+                    /* Shortcut KBD Badge */
+                    .rtl-kbd {
+                        display: inline-flex !important;
+                        align-items: center !important;
+                        justify-content: center !important;
+                        min-width: 17px !important;
+                        height: 17px !important;
+                        padding: 0 4px !important;
                         font-size: 10px !important;
-                        font-weight: 500 !important;
-                        color: #9ca3af !important;
-                        background-color: rgba(255, 255, 255, 0.08) !important;
-                        border: 1px solid rgba(255, 255, 255, 0.12) !important;
-                        border-radius: 5px !important;
-                        padding: 1px 5px !important;
-                        letter-spacing: 0.2px !important;
-                        line-height: 1.2 !important;
-                        text-shadow: none !important;
-                        user-select: none !important;
+                        font-weight: 600 !important;
+                        line-height: 1 !important;
+                        color: var(--muted-foreground, #a1a1aa) !important;
+                        background-color: var(--muted, rgba(255, 255, 255, 0.08)) !important;
+                        border: 1px solid var(--border, rgba(255, 255, 255, 0.15)) !important;
+                        border-radius: 4px !important;
+                        box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2) !important;
                     }
                     .rtl-row {
                         position: relative !important;
@@ -307,13 +303,35 @@ win.webContents.on('dom-ready', () => {
                         align-items: center !important;
                         justify-content: space-between !important;
                         gap: 8px !important;
-                        margin-bottom: 7px !important;
-                        font-size: 11px !important;
+                        height: 28px !important;
+                        min-height: 28px !important;
+                        margin-bottom: 0 !important;
+                        font-size: 12px !important;
+                        box-sizing: border-box !important;
                     }
                     .rtl-label {
+                        font-size: 12px !important;
                         font-weight: 500 !important;
                         color: #d4d4d8 !important;
+                        opacity: 0.9 !important;
                         white-space: nowrap !important;
+                        line-height: 1.2 !important;
+                    }
+                    .rtl-separator {
+                        display: block !important;
+                        height: 1px !important;
+                        background-color: rgba(255, 255, 255, 0.08) !important;
+                        margin: 8px -14px !important;
+                        width: calc(100% + 28px) !important;
+                        box-sizing: border-box !important;
+                        border: none !important;
+                    }
+                    .rtl-separator-spaced {
+                        margin-top: 13px !important;
+                        margin-bottom: 13px !important;
+                    }
+                    .rtl-row-section-start {
+                        margin-top: 8px !important;
                     }
                     
                     /* Animated Sliders & Number Badges with Counter Effect */
@@ -435,6 +453,28 @@ win.webContents.on('dom-ready', () => {
                         transform: translateY(-8px) scale(0.95) !important;
                         pointer-events: none !important;
                         transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+                        color-scheme: dark !important;
+                        scrollbar-width: thin !important;
+                        scrollbar-color: rgba(255, 255, 255, 0.2) transparent !important;
+                    }
+
+                    .rtl-dropdown-menu::-webkit-scrollbar {
+                        width: 5px !important;
+                        height: 5px !important;
+                    }
+
+                    .rtl-dropdown-menu::-webkit-scrollbar-track {
+                        background: transparent !important;
+                        margin: 4px 0 !important;
+                    }
+
+                    .rtl-dropdown-menu::-webkit-scrollbar-thumb {
+                        background-color: rgba(255, 255, 255, 0.2) !important;
+                        border-radius: 9999px !important;
+                    }
+
+                    .rtl-dropdown-menu::-webkit-scrollbar-thumb:hover {
+                        background-color: rgba(255, 255, 255, 0.35) !important;
                     }
 
                     .rtl-dropdown.open .rtl-dropdown-menu {
@@ -467,42 +507,45 @@ win.webContents.on('dom-ready', () => {
                         background-color: rgba(208, 254, 27, 0.09) !important;
                     }
 
-                    /* Switches */
+                    /* Switches (Matching base code: h-6 w-11) */
                     .rtl-toggle-btn-reset {
                         position: relative !important;
                         display: inline-flex !important;
                         align-items: center !important;
-                        width: 38px !important;
-                        height: 20px !important;
-                        border-radius: 10px !important;
+                        width: 44px !important;
+                        height: 24px !important;
+                        border-radius: 9999px !important;
                         border: none !important;
                         cursor: pointer !important;
                         outline: none !important;
                         padding: 0 !important;
                         box-sizing: border-box !important;
                         flex-shrink: 0 !important;
-                        background-color: #27272a !important;
+                        background-color: rgba(255, 255, 255, 0.16) !important;
                         transition: background-color 0.2s ease, box-shadow 0.2s ease !important;
+                    }
+                    .rtl-toggle-btn-reset:hover {
+                        background-color: rgba(255, 255, 255, 0.22) !important;
                     }
                     .rtl-toggle-btn-reset.active {
                         background-color: #D0FE1B !important;
-                        box-shadow: 0 0 10px rgba(208, 254, 27, 0.4) !important;
+                        box-shadow: 0 0 12px rgba(208, 254, 27, 0.45) !important;
                     }
                     .rtl-toggle-knob {
                         position: absolute !important;
-                        top: 2px !important;
-                        left: 2px !important;
+                        top: 4px !important;
+                        left: 4px !important;
                         width: 16px !important;
                         height: 16px !important;
                         border-radius: 50% !important;
                         background-color: #ffffff !important;
-                        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5) !important;
+                        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
                         transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease !important;
                         transform: translateX(0px) !important;
                     }
                     .rtl-toggle-btn-reset.active .rtl-toggle-knob {
-                        transform: translateX(18px) !important;
-                        background-color: #000000 !important;
+                        transform: translateX(20px) !important;
+                        background-color: #08080a !important;
                     }
                     .rtl-info-icon {
                         position: relative !important;
@@ -529,9 +572,12 @@ win.webContents.on('dom-ready', () => {
                         border-radius: 6px !important;
                         padding: 4px 8px !important;
                         font-size: 10px !important;
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
                         line-height: 1.3 !important;
                         white-space: normal !important;
+                        box-sizing: border-box !important;
                         width: 140px !important;
+                        max-width: 140px !important;
                         text-align: center !important;
                         z-index: 1000000 !important;
                         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.9) !important;
@@ -541,11 +587,6 @@ win.webContents.on('dom-ready', () => {
                     .rtl-info-icon:hover .rtl-tooltip {
                         visibility: visible !important;
                         opacity: 1 !important;
-                    }
-                    .rtl-separator {
-                        height: 1px !important;
-                        background-color: rgba(255, 255, 255, 0.08) !important;
-                        margin: 6px 0 !important;
                     }
                     .rtl-reset-btn {
                         background: none !important;
@@ -593,18 +634,46 @@ win.webContents.on('dom-ready', () => {
                         80% { transform: rotate(12deg); }
                         100% { transform: rotate(0deg); }
                     }
-                    .rtl-github-link {
+                    .rtl-panel-footer {
                         display: flex !important;
                         align-items: center !important;
-                        justify-content: center !important;
+                        justify-content: space-between !important;
+                        width: 100% !important;
+                        box-sizing: border-box !important;
+                        padding: 8px 0 4px 0 !important;
+                        margin: 0 !important;
+                    }
+                    .rtl-version-badge {
+                        display: inline-flex !important;
+                        align-items: center !important;
+                        font-size: 10px !important;
+                        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace !important;
+                        font-weight: 500 !important;
+                        color: #71717a !important;
+                        background-color: rgba(255, 255, 255, 0.05) !important;
+                        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+                        border-radius: 4px !important;
+                        padding: 1px 5px !important;
+                        letter-spacing: 0.3px !important;
+                        line-height: 1.2 !important;
+                        user-select: none !important;
+                        transition: color 0.15s ease, border-color 0.15s ease !important;
+                    }
+                    .rtl-version-badge:hover {
+                        color: #a1a1aa !important;
+                        border-color: rgba(255, 255, 255, 0.16) !important;
+                    }
+                    .rtl-github-link {
+                        display: inline-flex !important;
+                        align-items: center !important;
                         gap: 5px !important;
                         font-size: 11px !important;
                         font-weight: 600 !important;
                         color: #D0FE1B !important;
                         text-decoration: none !important;
                         opacity: 0.85 !important;
-                        padding-top: 4px !important;
-                        transition: opacity 0.15s ease, transform 0.15s ease !important;
+                        transition: opacity 0.15s ease, transform 0.15s ease, text-shadow 0.15s ease !important;
+                        transform-origin: left center !important;
                     }
                     .rtl-github-link:hover {
                         opacity: 1 !important;
@@ -850,16 +919,6 @@ win.webContents.on('dom-ready', () => {
                 });
             }
 
-            document.body.addEventListener('input', updateDir, { capture: true });
-            document.body.addEventListener('focusin', updateDir, { capture: true });
-            const observer = new MutationObserver(() => {
-                attachWidget();
-                updateDir();
-            });
-            observer.observe(document.body, { childList: true, subtree: true });
-            setInterval(updateDir, 500);
-            setInterval(attachWidget, 1000);
-            window.addEventListener('resize', attachWidget);
             
             // Keyboard Shortcuts
             document.addEventListener('keydown', (e) => {
@@ -869,15 +928,10 @@ win.webContents.on('dom-ready', () => {
                 }
             });
             
-            document.addEventListener('keydown', (e) => {
-                if (!fixAtSign) return;
-                if (e.code === 'Digit2' && e.shiftKey) {
-                    if (e.key === '٬' || e.key === '،') {
-                        e.preventDefault();
-                        document.execCommand('insertText', false, '@');
-                    }
-                }
-            }, { capture: true });
+            const isMac = /Mac/i.test(navigator.userAgent || navigator.platform);
+            const shortcutKbdHtml = isMac 
+                ? '<span class="flex items-center gap-1" style="display:inline-flex;align-items:center;gap:3px;"><kbd class="rtl-kbd">⌥</kbd><kbd class="rtl-kbd">R</kbd></span>'
+                : '<span class="flex items-center gap-0.5" style="display:inline-flex;align-items:center;gap:2px;"><kbd class="rtl-kbd">Alt</kbd><span class="opacity-40 text-[9px] mx-0.5" style="opacity:0.4;font-size:9px;margin:0 2px;">+</span><kbd class="rtl-kbd">R</kbd></span>';
 
             // Clean up any legacy or duplicate RTL widget/panels from previous patches
             const legacyWidgets = document.querySelectorAll('#rtl-settings-wrapper, #rtl-toggle-btn, .rtl-widget-container');
@@ -886,59 +940,57 @@ win.webContents.on('dom-ready', () => {
                 if (container && container.parentNode) container.parentNode.removeChild(container);
             });
 
-            // 3. Create Floating Widget
+            // 3. Create Native Topbar Button Trigger (Twin of Install IDE button from base code)
             const widgetWrapper = document.createElement('div');
+            widgetWrapper.id = 'rtl-topbar-wrapper';
+            widgetWrapper.className = 'relative inline-flex items-center';
+            widgetWrapper.style.appRegion = 'no-drag';
             widgetWrapper.innerHTML = \`
-                <div class="rtl-widget-container corner-\${currentCorner}">
-                  <!-- Trigger Icon -->
-                  <div class="rtl-widget-trigger" title="RZ Antigravity RTL (Click to open, Drag to move)">
-                    <svg style="pointer-events: none;" height="19" width="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <path d="M2 12h20"></path>
-                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                    </svg>
-                  </div>
-                  
-                  <!-- Panel -->
-                  <div class="rtl-widget-panel">
+                <!-- Topbar Button (Matching Open IDE / Install IDE button) -->
+                <button id="rtl-topbar-btn" type="button" class="rtl-topbar-btn inline-flex items-center font-medium transition-colors select-none outline-none cursor-pointer justify-center border border-border bg-transparent text-secondary-foreground hover:text-foreground hover:bg-secondary h-7 text-sm rounded-md gap-1.5 px-2.5 whitespace-nowrap \${isRTL ? 'active' : ''}" style="app-region: no-drag;" title="RZ Antigravity RTL (\${isMac ? '⌥R' : 'Alt+R'})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><circle cx="12" cy="12" r="10"></circle><path d="M2 12h20"></path><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg><span id="rtl-topbar-text">RZ RTL</span></button>
+            \`;
+
+            // 4. Create Portaled Panel
+            const panel = document.createElement('div');
+            panel.id = 'rtl-widget-panel-portal';
+            panel.innerHTML = \`
                     <!-- Header -->
-                    <div class="rtl-panel-header">
-                        <svg height="14" width="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h6m-6-4h16m-6 8h6M4 6h16"/></svg>
-                        <span>RZ Antigravity RTL</span>
-                        <span class="rtl-version-badge">v1.1.4</span>
+                    <div class="rtl-panel-header flex items-center justify-between pb-1">
+                        <span class="rtl-header-title text-xs font-semibold uppercase tracking-wider text-muted-foreground">RZ Antigravity RTL</span>
+                        \${shortcutKbdHtml}
                     </div>
                     
-                    <!-- Toggle -->
-                    <div class="rtl-row">
-                      <div style="display: flex; align-items: center;">
-                        <span id="rtl-toggle-label" class="rtl-label">\${isRTL ? 'Enabled' : 'Disabled'}</span>
-                        <div class="rtl-info-icon">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 -960 960 960" fill="currentColor"><path d="M450-290h60V-520H450v230Zm52.92-307.75q9.38-9.29 9.38-23.02t-9.29-23.02T480-653.07t-23.02,9.29t-9.29,23.02t9.38,23.02T480-588.46t22.92-9.29ZM480.07-100q-78.84,0-148.2-29.92T211.18-211.13T129.93-331.76T100-479.93t29.92-148.2t81.21-120.68t120.63-81.25T479.93-860t148.2,29.92t120.68,81.21t81.25,120.63T860-480.07t-29.92,148.2T748.87-211.18T628.24-129.93T480.07-100ZM480-160q134,0 227-93t93-227T707-707T480-800T253-707T160-480t93,227t227,93Zm0-320Z"></path></svg>
-                          <div class="rtl-tooltip">Shortcut: Alt + R</div>
-                        </div>
+                    <div class="rtl-separator"></div>
+
+                    <!-- Toggles Category (Enable & Force RTL) -->
+                    <div class="flex flex-col gap-1.5" style="display: flex; flex-direction: column; gap: 6px;">
+                      <!-- Enable Toggle -->
+                      <div class="rtl-row flex items-center justify-between gap-4 h-7">
+                        <span id="rtl-toggle-label" class="rtl-label font-medium text-xs opacity-90">\${isRTL ? 'Enabled' : 'Disabled'}</span>
+                        <button id="rtl-toggle-btn" type="button" role="switch" aria-checked="\${isRTL}" class="rtl-toggle-btn-reset relative inline-flex items-center rounded-full transition-colors duration-200 ease-in-out shrink-0 h-6 w-11 \${isRTL ? 'active' : ''} cursor-pointer">
+                          <span id="rtl-toggle-knob" class="rtl-toggle-knob"></span>
+                        </button>
                       </div>
-                      <button id="rtl-toggle-btn" type="button" role="switch" aria-checked="\${isRTL}" class="rtl-toggle-btn-reset \${isRTL ? 'active' : ''}">
-                        <span id="rtl-toggle-knob" class="rtl-toggle-knob"></span>
-                      </button>
+
+                      <!-- Force RTL Toggle -->
+                      <div id="rtl-force-row" class="rtl-row flex items-center justify-between gap-2 h-7 transition-opacity \${isRTL ? '' : 'opacity-40 pointer-events-none'}" style="\${isRTL ? '' : 'opacity: 0.4; pointer-events: none;'}">
+                        <div class="flex items-center" style="display: flex; align-items: center;">
+                          <span class="rtl-label font-medium text-xs opacity-80 whitespace-nowrap">Force RTL</span>
+                          <div class="rtl-info-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 -960 960 960" fill="currentColor"><path d="M450-290h60V-520H450v230Zm52.92-307.75q9.38-9.29 9.38-23.02t-9.29-23.02T480-653.07t-23.02,9.29t-9.29,23.02t9.38,23.02T480-588.46t22.92-9.29ZM480.07-100q-78.84,0-148.2-29.92T211.18-211.13T129.93-331.76T100-479.93t29.92-148.2t81.21-120.68t120.63-81.25T479.93-860t148.2,29.92t120.68,81.21t81.25,120.63T860-480.07t-29.92,148.2T748.87-211.18T628.24-129.93T480.07-100ZM480-160q134,0 227-93t93-227T707-707T480-800T253-707T160-480t93,227t227,93Zm0-320Z"></path></svg>
+                            <div class="rtl-tooltip">Forces Chat to RTL even if starting with English.</div>
+                          </div>
+                        </div>
+                        <button id="rtl-force-btn" type="button" role="switch" aria-checked="\${forceRTL}" class="rtl-toggle-btn-reset relative inline-flex items-center rounded-full transition-colors duration-200 ease-in-out shrink-0 h-6 w-11 \${forceRTL ? 'active' : ''} cursor-pointer">
+                          <span class="rtl-toggle-knob"></span>
+                        </button>
+                      </div>
                     </div>
+                    
+                    <div class="rtl-separator rtl-separator-spaced"></div>
                     
                     <!-- Settings Controls -->
-                    <div id="rtl-settings-wrapper" style="display: flex; flex-direction: column; gap: 4px; transition: opacity 0.2s; \${isRTL ? '' : 'opacity: 0.4; pointer-events: none;'}">
-                        <!-- Force RTL Toggle -->
-                        <div class="rtl-row">
-                          <div style="display: flex; align-items: center;">
-                            <span class="rtl-label">Force RTL</span>
-                            <div class="rtl-info-icon">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 -960 960 960" fill="currentColor"><path d="M450-290h60V-520H450v230Zm52.92-307.75q9.38-9.29 9.38-23.02t-9.29-23.02T480-653.07t-23.02,9.29t-9.29,23.02t9.38,23.02T480-588.46t22.92-9.29ZM480.07-100q-78.84,0-148.2-29.92T211.18-211.13T129.93-331.76T100-479.93t29.92-148.2t81.21-120.68t120.63-81.25T479.93-860t148.2,29.92t120.68,81.21t81.25,120.63T860-480.07t-29.92,148.2T748.87-211.18T628.24-129.93T480.07-100ZM480-160q134,0 227-93t93-227T707-707T480-800T253-707T160-480t93,227t227,93Zm0-320Z"></path></svg>
-                              <div class="rtl-tooltip" style="width: 170px;">Forces Chat to RTL even if starting with English.</div>
-                            </div>
-                          </div>
-                          <button id="rtl-force-btn" type="button" role="switch" aria-checked="\${forceRTL}" class="rtl-toggle-btn-reset \${forceRTL ? 'active' : ''}">
-                            <span class="rtl-toggle-knob"></span>
-                          </button>
-                        </div>
-                        
-                        <div class="rtl-separator"></div>
+                    <div id="rtl-settings-wrapper" class="flex flex-col gap-1.5 transition-all duration-300 \${isRTL ? '' : 'opacity-40 pointer-events-none'}" style="display: flex; flex-direction: column; gap: 6px; transition: opacity 0.2s; \${isRTL ? '' : 'opacity: 0.4; pointer-events: none;'}">
                         
                         <!-- Persian Font Dropdown (Custom Animated) -->
                         <div class="rtl-row">
@@ -995,12 +1047,12 @@ win.webContents.on('dom-ready', () => {
                         </div>
                         
                         <!-- Line Height Slider + Animated Value + Reset -->
-                        <div class="rtl-row">
+                        <div class="rtl-row rtl-row-section-start">
                           <span class="rtl-label" title="Chat Line Height">Line Height</span>
                           <div style="display: flex; align-items: center; gap: 6px;">
-                            <input id="rtl-lh-input" type="range" min="1.2" max="2.5" step="0.1" value="\${rtlConfig.lh || '1.6'}" style="width: 82px; cursor: pointer; accent-color: #D0FE1B; margin-right: 6px;">
-                            <span id="rtl-lh-val" class="rtl-slider-val"><span class="rtl-val-text">\${rtlConfig.lh || '1.6'}</span></span>
-                            <button id="rtl-lh-reset" type="button" class="rtl-reset-btn" title="Reset to 1.6">
+                            <input id="rtl-lh-input" type="range" min="1.2" max="2.5" step="0.1" value="\${rtlConfig.lh || '1.7'}" style="width: 82px; cursor: pointer; accent-color: #D0FE1B; margin-right: 6px;">
+                            <span id="rtl-lh-val" class="rtl-slider-val"><span class="rtl-val-text">\${rtlConfig.lh || '1.7'}</span></span>
+                            <button id="rtl-lh-reset" type="button" class="rtl-reset-btn" title="Reset to 1.7">
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
                             </button>
                           </div>
@@ -1010,88 +1062,104 @@ win.webContents.on('dom-ready', () => {
                         <div class="rtl-row">
                           <span class="rtl-label" title="Chat Font Size">Font Size</span>
                           <div style="display: flex; align-items: center; gap: 6px;">
-                            <input id="rtl-fs-input" type="range" min="11" max="22" step="1" value="\${rtlConfig.fs || '14'}" style="width: 82px; cursor: pointer; accent-color: #D0FE1B; margin-right: 6px;">
-                            <span id="rtl-fs-val" class="rtl-slider-val"><span class="rtl-val-text">\${rtlConfig.fs || '14'}px</span></span>
-                            <button id="rtl-fs-reset" type="button" class="rtl-reset-btn" title="Reset to 14px">
+                            <input id="rtl-fs-input" type="range" min="11" max="22" step="1" value="\${rtlConfig.fs || '15'}" style="width: 82px; cursor: pointer; accent-color: #D0FE1B; margin-right: 6px;">
+                            <span id="rtl-fs-val" class="rtl-slider-val"><span class="rtl-val-text">\${rtlConfig.fs || '15'}px</span></span>
+                            <button id="rtl-fs-reset" type="button" class="rtl-reset-btn" title="Reset to 15px">
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
                             </button>
                           </div>
                         </div>
                         
-                        <div class="rtl-separator"></div>
-
-                        <!-- Fix Shift+2 @ Toggle -->
-                        <div class="rtl-row">
-                          <div style="display: flex; align-items: center;">
-                            <span class="rtl-label">Shift+2 = @</span>
-                            <div class="rtl-info-icon">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 -960 960 960" fill="currentColor"><path d="M450-290h60V-520H450v230Zm52.92-307.75q9.38-9.29 9.38-23.02t-9.29-23.02T480-653.07t-23.02,9.29t-9.29,23.02t9.38,23.02T480-588.46t22.92-9.29ZM480.07-100q-78.84,0-148.2-29.92T211.18-211.13T129.93-331.76T100-479.93t29.92-148.2t81.21-120.68t120.63-81.25T479.93-860t148.2,29.92t120.68,81.21t81.25,120.63T860-480.07t-29.92,148.2T748.87-211.18T628.24-129.93T480.07-100ZM480-160q134,0 227-93t93-227T707-707T480-800T253-707T160-480t93,227t227,93Zm0-320Z"></path></svg>
-                              <div class="rtl-tooltip" style="width: 160px;">Forces Shift+2 to type '@' instead of '٬' on Persian keyboard.</div>
-                            </div>
-                          </div>
-                          <button id="rtl-at-btn" type="button" role="switch" aria-checked="\${fixAtSign}" class="rtl-toggle-btn-reset \${fixAtSign ? 'active' : ''}">
-                            <span class="rtl-toggle-knob"></span>
-                          </button>
-                        </div>
                     </div>
                     
                     <div class="rtl-separator"></div>
                     
-                    <!-- GitHub -->
-                    <a href="https://github.com/rezasalimi01/rz-antigravity-rtl" target="_blank" class="rtl-github-link">
-                      <svg height="14" width="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"></path></svg>
-                      Star on GitHub
-                    </a>
-                  </div>
-                </div>
+                    <!-- Footer: GitHub & Version -->
+                    <div class="rtl-panel-footer">
+                      <a href="https://github.com/rezasalimi01/rz-antigravity-rtl" target="_blank" class="rtl-github-link">
+                        <svg height="14" width="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"></path></svg>
+                        Star on GitHub
+                      </a>
+                      <span class="rtl-version-badge">v1.1.5</span>
+                    </div>
             \`;
-            function getDesktopChatBox() {
-                const cv = document.querySelector('[data-testid="conversation-view"]');
-                if (cv) {
-                    const pane = cv.closest('[class*="group/pane"]') || cv.parentElement;
-                    if (pane && pane.getBoundingClientRect().width > 100) return pane;
-                    return cv;
-                }
-                const pane = document.querySelector('[class*="group/pane"]');
-                if (pane && pane.getBoundingClientRect().width > 100) return pane;
-                return document.querySelector('.flex-1.flex.flex-col.min-w-0.h-full') || document.body;
-            }
 
-            const container = widgetWrapper.firstElementChild;
+            function syncButtonWithOpenIde() {
+                const btn = widgetWrapper ? widgetWrapper.querySelector('#rtl-topbar-btn') : null;
+                if (!btn) return;
+                const refBtn = document.querySelector('[data-testid="open-ide"]')
+                    || document.querySelector('[data-testid="open-editor"]')
+                    || document.querySelector('[data-testid="open-editor-single"]')
+                    || document.querySelector('[data-testid="open-editor-multi"]')
+                    || document.querySelector('[data-testid="open-editor-empty"]')
+                    || document.querySelector('[data-testid="install-editor"]');
+                if (!refBtn) return;
 
-            function attachWidget() {
-                if (!container) return;
-                const chatBox = getDesktopChatBox();
-                const targetParent = (chatBox && chatBox !== document.body) ? chatBox : document.body;
-
-                if (targetParent !== document.body) {
-                    const cs = window.getComputedStyle(targetParent);
-                    if (cs.position === 'static') {
-                        targetParent.style.setProperty('position', 'relative', 'important');
+                try {
+                    const cs = window.getComputedStyle(refBtn);
+                    const h = parseFloat(cs.height);
+                    if (h > 15) {
+                        btn.style.setProperty('height', cs.height, 'important');
                     }
-                    container.style.setProperty('position', 'absolute', 'important');
-                } else {
-                    container.style.setProperty('position', 'fixed', 'important');
-                }
-
-                if (container.parentNode !== targetParent) {
-                    targetParent.appendChild(container);
-                }
+                    const pl = parseFloat(cs.paddingLeft);
+                    const pr = parseFloat(cs.paddingRight);
+                    if (pl > 0) btn.style.setProperty('padding-left', cs.paddingLeft, 'important');
+                    if (pr > 0) btn.style.setProperty('padding-right', cs.paddingRight, 'important');
+                    if (cs.fontSize) btn.style.setProperty('font-size', cs.fontSize, 'important');
+                    if (cs.fontFamily) btn.style.setProperty('font-family', cs.fontFamily, 'important');
+                    if (cs.fontWeight) btn.style.setProperty('font-weight', cs.fontWeight, 'important');
+                    if (cs.lineHeight) btn.style.setProperty('line-height', cs.lineHeight, 'important');
+                    if (cs.borderRadius) btn.style.setProperty('border-radius', cs.borderRadius, 'important');
+                } catch(e) {}
             }
 
-            attachWidget();
-            const trigger = container.querySelector('.rtl-widget-trigger');
-            const toggleBtn = document.getElementById('rtl-toggle-btn');
-            const toggleLabel = document.getElementById('rtl-toggle-label');
-            const settingsWrapper = document.getElementById('rtl-settings-wrapper');
-            const forceBtn = document.getElementById('rtl-force-btn');
-            const atBtn = document.getElementById('rtl-at-btn');
-            const lhInput = document.getElementById('rtl-lh-input');
-            const lhVal = document.getElementById('rtl-lh-val');
-            const lhResetBtn = document.getElementById('rtl-lh-reset');
-            const fsInput = document.getElementById('rtl-fs-input');
-            const fsVal = document.getElementById('rtl-fs-val');
-            const fsResetBtn = document.getElementById('rtl-fs-reset');
+            function attachElements() {
+                const openIdeBtn = document.querySelector('[data-testid="open-ide"]')
+                    || document.querySelector('[data-testid="open-editor"]')
+                    || document.querySelector('[data-testid="open-editor-single"]')
+                    || document.querySelector('[data-testid="open-editor-multi"]')
+                    || document.querySelector('[data-testid="open-editor-empty"]')
+                    || document.querySelector('[data-testid="install-editor"]');
+                const actionsCluster = openIdeBtn?.parentElement || document.querySelector('[data-testid="titlebar-more-actions"]')?.parentElement;
+                if (actionsCluster) {
+                    if (!widgetWrapper.isConnected || widgetWrapper.parentElement !== actionsCluster) {
+                        if (openIdeBtn && openIdeBtn.parentElement === actionsCluster) {
+                            actionsCluster.insertBefore(widgetWrapper, openIdeBtn);
+                        } else {
+                            actionsCluster.appendChild(widgetWrapper);
+                        }
+                    }
+                }
+                if (!panel.isConnected && !document.getElementById('rtl-widget-panel-portal')) {
+                    document.body.appendChild(panel);
+                }
+                syncButtonWithOpenIde();
+            }
+
+            attachElements();
+
+            document.body.addEventListener('input', updateDir, { capture: true });
+            document.body.addEventListener('focusin', updateDir, { capture: true });
+            const observer = new MutationObserver(() => {
+                attachElements();
+                updateDir();
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+            setInterval(updateDir, 500);
+            setInterval(attachElements, 1000);
+
+            const topbarBtn = widgetWrapper.querySelector('#rtl-topbar-btn');
+            const toggleBtn = panel.querySelector('#rtl-toggle-btn');
+            const toggleLabel = panel.querySelector('#rtl-toggle-label');
+            const settingsWrapper = panel.querySelector('#rtl-settings-wrapper');
+            const forceBtn = panel.querySelector('#rtl-force-btn');
+            const forceRow = panel.querySelector('#rtl-force-row');
+            const lhInput = panel.querySelector('#rtl-lh-input');
+            const lhVal = panel.querySelector('#rtl-lh-val');
+            const lhResetBtn = panel.querySelector('#rtl-lh-reset');
+            const fsInput = panel.querySelector('#rtl-fs-input');
+            const fsVal = panel.querySelector('#rtl-fs-val');
+            const fsResetBtn = panel.querySelector('#rtl-fs-reset');
 
             // Setup Custom Dropdowns
             function setupDropdown(dropdownId, currentValue, onChange) {
@@ -1160,158 +1228,60 @@ win.webContents.on('dom-ready', () => {
                 };
             }
 
-            document.addEventListener('click', () => {
-                document.querySelectorAll('.rtl-dropdown.open').forEach(d => d.classList.remove('open'));
-            });
-
-            // Apply Corner Position
-            function applyCorner(corner) {
-                currentCorner = corner;
-                localStorage.setItem('rz-widget-corner', corner);
-                container.classList.remove('corner-br', 'corner-bl', 'corner-tr', 'corner-tl');
-                container.classList.add(\`corner-\${corner}\`);
-                container.style.removeProperty('left');
-                container.style.removeProperty('right');
-                container.style.removeProperty('top');
-                container.style.removeProperty('bottom');
+            function updateDropdownPosition() {
+                if (!topbarBtn || !panel) return;
+                const rect = topbarBtn.getBoundingClientRect();
+                panel.style.top = (rect.bottom + 6) + 'px';
+                panel.style.right = Math.max(8, window.innerWidth - rect.right) + 'px';
+                panel.style.left = 'auto';
             }
 
-            applyCorner(currentCorner);
-
-            // Dragging with 4-Corner Snap strictly confined to Chat Box
-            let isMouseDown = false;
-            let isDragging = false;
-            let wasOpenOnMouseDown = false;
-            let startX = 0, startY = 0;
-            let initialLeft = 0, initialTop = 0;
-            let currentDragX = 0, currentDragY = 0;
-            let boxRect = null;
-
-            trigger.addEventListener('mousedown', (e) => {
-                if (e.button !== 0) return;
-                e.preventDefault();
-                isMouseDown = true;
-                isDragging = false;
-                wasOpenOnMouseDown = container.classList.contains('open');
-                startX = e.clientX;
-                startY = e.clientY;
-
-                if (!wasOpenOnMouseDown) {
-                    const chatBox = getDesktopChatBox();
-                    boxRect = chatBox ? chatBox.getBoundingClientRect() : document.body.getBoundingClientRect();
-                    const elemRect = container.getBoundingClientRect();
-
-                    initialLeft = elemRect.left - boxRect.left;
-                    initialTop = elemRect.top - boxRect.top;
-                    currentDragX = initialLeft;
-                    currentDragY = initialTop;
-                }
-            });
-
-            window.addEventListener('mousemove', (e) => {
-                if (!isMouseDown || wasOpenOnMouseDown) return;
-                const dx = e.clientX - startX;
-                const dy = e.clientY - startY;
-
-                if (!isDragging && Math.hypot(dx, dy) > 3) {
-                    isDragging = true;
-                    container.classList.add('dragging');
-                    container.classList.remove('corner-br', 'corner-bl', 'corner-tr', 'corner-tl', 'open');
-                    document.querySelectorAll('.rtl-dropdown.open').forEach(d => d.classList.remove('open'));
-                }
-
-                if (isDragging) {
-                    if (!boxRect) {
-                        const chatBox = getDesktopChatBox();
-                        boxRect = chatBox ? chatBox.getBoundingClientRect() : document.body.getBoundingClientRect();
-                    }
-
-                    const minX = 14;
-                    const maxX = Math.max(minX, boxRect.width - 52);
-                    const minY = 14;
-                    const maxY = Math.max(minY, boxRect.height - 52);
-
-                    currentDragX = Math.max(minX, Math.min(maxX, initialLeft + dx));
-                    currentDragY = Math.max(minY, Math.min(maxY, initialTop + dy));
-
-                    container.style.setProperty('left', currentDragX + 'px', 'important');
-                    container.style.setProperty('top', currentDragY + 'px', 'important');
-                    container.style.setProperty('right', 'auto', 'important');
-                    container.style.setProperty('bottom', 'auto', 'important');
-                }
-            });
-
-            window.addEventListener('mouseup', (e) => {
-                if (!isMouseDown) return;
-                isMouseDown = false;
-
-                if (wasOpenOnMouseDown) {
-                    e.stopPropagation();
-                    container.classList.remove('open');
-                    document.querySelectorAll('.rtl-dropdown.open').forEach(d => d.classList.remove('open'));
-                    wasOpenOnMouseDown = false;
-                    boxRect = null;
-                    return;
-                }
-
-                if (isDragging) {
-                    if (!boxRect) {
-                        const chatBox = getDesktopChatBox();
-                        boxRect = chatBox ? chatBox.getBoundingClientRect() : document.body.getBoundingClientRect();
-                    }
-
-                    const centerX = currentDragX + 19;
-                    const centerY = currentDragY + 19;
-
-                    const isLeft = centerX < (boxRect.width / 2);
-                    const isTop = centerY < (boxRect.height / 2);
-                    const corner = (isTop ? 't' : 'b') + (isLeft ? 'l' : 'r');
-
-                    // Pre-align properties for smooth CSS transition without jumps:
-                    const currentBottom = Math.max(0, boxRect.height - currentDragY - 38);
-                    const currentRight = Math.max(0, boxRect.width - currentDragX - 38);
-
-                    if (corner === 'br') {
-                        container.style.setProperty('right', currentRight + 'px', 'important');
-                        container.style.removeProperty('left');
-                        container.style.setProperty('bottom', currentBottom + 'px', 'important');
-                        container.style.removeProperty('top');
-                    } else if (corner === 'bl') {
-                        container.style.setProperty('left', currentDragX + 'px', 'important');
-                        container.style.removeProperty('right');
-                        container.style.setProperty('bottom', currentBottom + 'px', 'important');
-                        container.style.removeProperty('top');
-                    } else if (corner === 'tr') {
-                        container.style.setProperty('right', currentRight + 'px', 'important');
-                        container.style.removeProperty('left');
-                        container.style.setProperty('top', currentDragY + 'px', 'important');
-                        container.style.removeProperty('bottom');
-                    } else if (corner === 'tl') {
-                        container.style.setProperty('left', currentDragX + 'px', 'important');
-                        container.style.removeProperty('right');
-                        container.style.setProperty('top', currentDragY + 'px', 'important');
-                        container.style.removeProperty('bottom');
-                    }
-
-                    void container.offsetWidth;
-                    container.classList.remove('dragging');
-                    applyCorner(corner);
-
-                    setTimeout(() => { isDragging = false; }, 60);
+            function togglePanel(show) {
+                if (!panel || !topbarBtn) return;
+                const isVisible = panel.classList.contains('open');
+                const nextState = show !== undefined ? show : !isVisible;
+                if (nextState) {
+                    updateDropdownPosition();
+                    panel.classList.add('open');
+                    topbarBtn.classList.add('panel-open');
+                    topbarBtn.setAttribute('aria-expanded', 'true');
                 } else {
-                    e.stopPropagation();
-                    container.classList.toggle('open');
-                    if (!container.classList.contains('open')) {
-                        document.querySelectorAll('.rtl-dropdown.open').forEach(d => d.classList.remove('open'));
-                    }
+                    panel.classList.remove('open');
+                    panel.querySelectorAll('.rtl-dropdown.open').forEach(d => d.classList.remove('open'));
+                    topbarBtn.classList.remove('panel-open');
+                    topbarBtn.setAttribute('aria-expanded', 'false');
                 }
-                boxRect = null;
+            }
+
+            if (topbarBtn) {
+                topbarBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    togglePanel();
+                });
+            }
+
+            panel.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!e.target.closest('.rtl-dropdown')) {
+                    panel.querySelectorAll('.rtl-dropdown.open').forEach(d => d.classList.remove('open'));
+                }
             });
 
             document.addEventListener('click', (e) => {
-                if (!container.contains(e.target)) {
-                    container.classList.remove('open');
-                    document.querySelectorAll('.rtl-dropdown.open').forEach(d => d.classList.remove('open'));
+                if (panel && !panel.contains(e.target) && topbarBtn && !topbarBtn.contains(e.target)) {
+                    togglePanel(false);
+                }
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    togglePanel(false);
+                }
+            });
+
+            window.addEventListener('resize', () => {
+                if (panel && panel.classList.contains('open')) {
+                    updateDropdownPosition();
                 }
             });
 
@@ -1332,8 +1302,7 @@ win.webContents.on('dom-ready', () => {
                     lh: lhInput.value,
                     fs: fsInput.value,
                     isRTL: isRTL,
-                    forceRTL: forceRTL,
-                    fixAtSign: fixAtSign
+                    forceRTL: forceRTL
                 };
                 try {
                     localStorage.setItem('rz-antigravity-rtl-config', JSON.stringify(cfg));
@@ -1341,36 +1310,45 @@ win.webContents.on('dom-ready', () => {
                 console.log("SAVE_RTL_CONFIG|" + JSON.stringify(cfg));
             };
 
+            function clearRTL() {
+                if (rtlStyle.parentNode) rtlStyle.parentNode.removeChild(rtlStyle);
+                document.querySelectorAll('[dir]').forEach(el => {
+                    el.removeAttribute('dir');
+                });
+                window.dispatchEvent(new Event('resize'));
+            }
+
             function setRTLActive(active) {
                 isRTL = active;
                 saveConfig();
                 toggleBtn.setAttribute('aria-checked', isRTL);
                 toggleBtn.classList.toggle('active', isRTL);
                 toggleLabel.innerText = isRTL ? 'Enabled' : 'Disabled';
+                if (topbarBtn) topbarBtn.classList.toggle('active', isRTL);
                 
                 if (isRTL) {
+                    if (forceRow) {
+                        forceRow.style.opacity = '';
+                        forceRow.style.pointerEvents = '';
+                    }
                     settingsWrapper.style.opacity = '';
                     settingsWrapper.style.pointerEvents = '';
                     if (!rtlStyle.parentNode) document.head.appendChild(rtlStyle);
                     updateDynamicCSS(faDropdown.getValue(), enDropdown.getValue(), codeDropdown.getValue(), lhInput.value, fsInput.value);
                     updateDir();
                 } else {
+                    if (forceRow) {
+                        forceRow.style.opacity = '0.4';
+                        forceRow.style.pointerEvents = 'none';
+                    }
                     settingsWrapper.style.opacity = '0.4';
                     settingsWrapper.style.pointerEvents = 'none';
-                    if (rtlStyle.parentNode) rtlStyle.parentNode.removeChild(rtlStyle);
-                    
-                    const selectors = [
-                        '.leading-relaxed p', '.leading-relaxed li', '.leading-relaxed h1', '.leading-relaxed h2', '.leading-relaxed h3', '.leading-relaxed h4',
-                        '[data-testid="conversation-view"] p', '[data-testid="conversation-view"] li', '[data-testid="conversation-view"] h1', '[data-testid="conversation-view"] h2', '[data-testid="conversation-view"] h3', '[data-testid="conversation-view"] h4',
-                        '[data-testid="user-input-step"]', '[data-testid="user-input-step"] p', '[data-testid^="convo-pill-"]', '.truncate', '[contenteditable="true"]', '[contenteditable="true"] p'
-                    ];
-                    document.querySelectorAll(selectors.join(', ')).forEach(el => {
-                        if (el.hasAttribute('dir')) el.removeAttribute('dir');
-                    });
+                    clearRTL();
                 }
             }
 
             forceBtn.addEventListener('click', () => {
+                if (!isRTL) return;
                 forceRTL = !forceRTL;
                 saveConfig();
                 forceBtn.setAttribute('aria-checked', forceRTL);
@@ -1379,17 +1357,10 @@ win.webContents.on('dom-ready', () => {
                 updateDir();
             });
 
-            atBtn.addEventListener('click', () => {
-                fixAtSign = !fixAtSign;
-                saveConfig();
-                atBtn.setAttribute('aria-checked', fixAtSign);
-                atBtn.classList.toggle('active', fixAtSign);
-            });
-
             let popTimeouts = new WeakMap();
             let prevValues = new WeakMap();
-            prevValues.set(lhVal, parseFloat(lhInput.value) || 1.6);
-            prevValues.set(fsVal, parseFloat(fsInput.value) || 14);
+            prevValues.set(lhVal, parseFloat(lhInput.value) || 1.7);
+            prevValues.set(fsVal, parseFloat(fsInput.value) || 15);
 
             function updateValBadge(badgeEl, text, numVal) {
                 let textSpan = badgeEl.querySelector('.rtl-val-text');
@@ -1472,14 +1443,14 @@ win.webContents.on('dom-ready', () => {
 
             lhResetBtn.addEventListener('click', () => {
                 triggerResetRecoil(lhResetBtn);
-                animateCounter(lhInput, lhVal, '1.6', true, '', () => {
+                animateCounter(lhInput, lhVal, '1.7', true, '', () => {
                     onFontChange();
                 });
             });
 
             fsResetBtn.addEventListener('click', () => {
                 triggerResetRecoil(fsResetBtn);
-                animateCounter(fsInput, fsVal, '14', false, 'px', () => {
+                animateCounter(fsInput, fsVal, '15', false, 'px', () => {
                     onFontChange();
                 });
             });
@@ -1487,6 +1458,48 @@ win.webContents.on('dom-ready', () => {
             toggleBtn.addEventListener('click', () => {
                 setRTLActive(!isRTL);
             });
+
+            if (!isRTL) {
+                toggleBtn.setAttribute('aria-checked', 'false');
+                toggleBtn.classList.remove('active');
+                toggleLabel.innerText = 'Disabled';
+                if (topbarBtn) topbarBtn.classList.remove('active');
+                if (forceRow) {
+                    forceRow.style.opacity = '0.4';
+                    forceRow.style.pointerEvents = 'none';
+                }
+                settingsWrapper.style.opacity = '0.4';
+                settingsWrapper.style.pointerEvents = 'none';
+                clearRTL();
+            } else {
+                if (topbarBtn) topbarBtn.classList.add('active');
+                updateDir();
+            }
+        }
+
+        let isMounted = false;
+        let checkTimer = null;
+        let startupObserver = null;
+
+        function tryMount() {
+            if (isMounted) return;
+            if (isAntigravityReady()) {
+                isMounted = true;
+                if (checkTimer) clearInterval(checkTimer);
+                if (startupObserver) try { startupObserver.disconnect(); } catch (_) {}
+                init();
+            }
+        }
+
+        tryMount();
+        if (!isMounted) {
+            try {
+                startupObserver = new MutationObserver(() => tryMount());
+                startupObserver.observe(document.documentElement || document.body, { childList: true, subtree: true });
+            } catch (_) {}
+            checkTimer = setInterval(tryMount, 250);
+        }
+    })();
         `).catch(err => console.error("Failed to inject RTL features:", err));
 
     } catch(e) {
