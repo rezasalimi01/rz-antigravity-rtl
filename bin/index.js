@@ -265,7 +265,7 @@ async function patchDesktop(asarPath) {
         }
 
         utilsCode = utilsCode.replace(anchor, payload);
-        utilsCode = utilsCode.replace(/devTools:\s*!electron_1?\.app\.isPackaged/g, 'devTools: true');
+        utilsCode = utilsCode.replace(/devTools:\s*(?:!electron_1?\.app\.isPackaged|\(0,\s*debugConsole_1\.isDebugConsoleEnabled\)\(\))/g, 'devTools: true');
         fs.writeFileSync(utilsPath, utilsCode);
 
         const fontSource = path.join(__dirname, 'Vazirmatn-Variable.woff2');
@@ -316,6 +316,10 @@ async function patchIDE(ideAppPath) {
     const idePayloadDest = path.join(workbenchDir, 'ide-payload.js');
     const fontDest = path.join(workbenchDir, 'Vazirmatn-Variable.woff2');
 
+    const agyExtDir = path.join(ideAppPath, 'extensions', 'agy', 'vscode');
+    const agyExtJs = path.join(agyExtDir, 'extension.js');
+    const agyExtJsBak = path.join(agyExtDir, 'extension.js.original.bak');
+
     if (isRestore) {
         const spinner = ora('Restoring original Antigravity IDE workbench...').start();
         try {
@@ -324,6 +328,9 @@ async function patchIDE(ideAppPath) {
             }
             if (fs.existsSync(jetskiAgentHtmlBak)) {
                 fs.copyFileSync(jetskiAgentHtmlBak, jetskiAgentHtml);
+            }
+            if (fs.existsSync(agyExtJsBak)) {
+                fs.copyFileSync(agyExtJsBak, agyExtJs);
             }
             if (fs.existsSync(idePayloadDest)) {
                 fs.rmSync(idePayloadDest, { force: true });
@@ -356,6 +363,9 @@ async function patchIDE(ideAppPath) {
         }
         if (!fs.existsSync(jetskiAgentHtmlBak) && fs.existsSync(jetskiAgentHtml)) {
             fs.copyFileSync(jetskiAgentHtml, jetskiAgentHtmlBak);
+        }
+        if (!fs.existsSync(agyExtJsBak) && fs.existsSync(agyExtJs)) {
+            fs.copyFileSync(agyExtJs, agyExtJsBak);
         }
     } catch (e) {
         spinner.fail('Permission Denied on IDE folder.');
@@ -449,6 +459,248 @@ async function patchIDE(ideAppPath) {
 
         patchHtmlFile(workbenchHtml, workbenchHtmlBak);
         patchHtmlFile(jetskiAgentHtml, jetskiAgentHtmlBak);
+
+        // Patch extensions/agy/vscode/extension.js for Chat Webview RTL Proxy
+        if (fs.existsSync(agyExtJs)) {
+            let extCode = fs.existsSync(agyExtJsBak)
+                ? fs.readFileSync(agyExtJsBak, 'utf8')
+                : fs.readFileSync(agyExtJs, 'utf8');
+
+            if (extCode.includes('renderIframe(a,b,c){')) {
+                const proxySnippet = `
+/* --- RZ ANTIGRAVITY RTL PROXY --- */
+(function() {
+    let __rzProxy = null;
+    let __rzProxyPort = 0;
+    let __rzTargetUrl = '';
+
+    globalThis.__rzStartProxy = async function(targetUrl) {
+        if (!targetUrl || typeof targetUrl !== 'string') return targetUrl;
+        try {
+            const parsed = new URL(targetUrl);
+            if (__rzProxyPort > 0 && parseInt(parsed.port, 10) === __rzProxyPort) {
+                return targetUrl;
+            }
+        } catch(e) {}
+        __rzTargetUrl = targetUrl;
+        if (__rzProxyPort > 0) {
+            try {
+                const u = new URL(targetUrl);
+                u.port = String(__rzProxyPort);
+                return u.toString().replace(/\\/$/, '');
+            } catch(e) {
+                return 'http://127.0.0.1:' + __rzProxyPort;
+            }
+        }
+
+        try {
+            const http = require('http');
+            const net = require('net');
+            const fs = require('fs');
+            const path = require('path');
+
+            const payloadPath = path.resolve(__dirname, '..', '..', '..', 'out', 'vs', 'code', 'electron-browser', 'workbench', 'ide-payload.js');
+            const fontPath = path.resolve(__dirname, '..', '..', '..', 'out', 'vs', 'code', 'electron-browser', 'workbench', 'Vazirmatn-Variable.woff2');
+            const fontsDir = path.resolve(__dirname, '..', '..', '..', 'out', 'vs', 'code', 'electron-browser', 'workbench', 'fonts');
+
+            const server = http.createServer((req, res) => {
+                const url = req.url || '/';
+
+                if (url.startsWith('/rz-ide-payload.js')) {
+                    try {
+                        const code = fs.readFileSync(payloadPath, 'utf8');
+                        res.writeHead(200, {
+                            'Content-Type': 'application/javascript; charset=utf-8',
+                            'Cache-Control': 'no-cache, no-store, must-revalidate'
+                        });
+                        res.end(code);
+                    } catch(err) {
+                        res.writeHead(500);
+                        res.end('/* Error loading payload: ' + err.message + ' */');
+                    }
+                    return;
+                }
+
+                if (url.includes('/Vazirmatn-Variable.woff2')) {
+                    try {
+                        const font = fs.readFileSync(fontPath);
+                        res.writeHead(200, {
+                            'Content-Type': 'font/woff2',
+                            'Access-Control-Allow-Origin': '*',
+                            'Cache-Control': 'public, max-age=31536000'
+                        });
+                        res.end(font);
+                    } catch(err) {
+                        res.writeHead(404);
+                        res.end();
+                    }
+                    return;
+                }
+
+                let fontSubPath = null;
+                const fIdx = url.indexOf('/fonts/');
+                if (fIdx !== -1) {
+                    fontSubPath = url.slice(fIdx + '/fonts/'.length).split(/[?#]/)[0];
+                } else if (url.startsWith('fonts/')) {
+                    fontSubPath = url.slice('fonts/'.length).split(/[?#]/)[0];
+                }
+                if (fontSubPath) {
+                    try {
+                        const subPath = decodeURIComponent(fontSubPath);
+                        const fullFontPath = path.join(fontsDir, subPath);
+                        if (fs.existsSync(fullFontPath) && fs.statSync(fullFontPath).isFile()) {
+                            const font = fs.readFileSync(fullFontPath);
+                            const ext = path.extname(fullFontPath).toLowerCase();
+                            const mimeType = ext === '.ttf' ? 'font/ttf' : (ext === '.woff' ? 'font/woff' : 'font/woff2');
+                            res.writeHead(200, {
+                                'Content-Type': mimeType,
+                                'Access-Control-Allow-Origin': '*',
+                                'Cache-Control': 'public, max-age=31536000'
+                            });
+                            res.end(font);
+                            return;
+                        }
+                    } catch(err) {}
+                }
+
+                let targetHost = '127.0.0.1';
+                let targetPort = 7123;
+                try {
+                    const tu = new URL(__rzTargetUrl);
+                    targetHost = tu.hostname || '127.0.0.1';
+                    targetPort = parseInt(tu.port, 10) || 7123;
+                } catch(e) {}
+
+                const isFont = url.includes('/Vazirmatn-Variable.woff2') || url.includes('/fonts/');
+                const isHtml = !isFont && (url === '/' || url.startsWith('/?') || url.startsWith('/c/'));
+
+                const reqHeaders = { ...req.headers };
+                reqHeaders.host = targetHost + ':' + targetPort;
+                if (reqHeaders.origin) {
+                    reqHeaders.origin = 'http://' + targetHost + ':' + targetPort;
+                }
+                if (reqHeaders.referer) {
+                    try {
+                        const refUrl = new URL(reqHeaders.referer);
+                        refUrl.host = targetHost + ':' + targetPort;
+                        reqHeaders.referer = refUrl.toString();
+                    } catch(e) {}
+                }
+                delete reqHeaders['accept-encoding'];
+
+                const proxyReq = http.request({
+                    hostname: targetHost,
+                    port: targetPort,
+                    path: req.url,
+                    method: req.method,
+                    headers: reqHeaders
+                }, (proxyRes) => {
+                    if (isHtml && (proxyRes.headers['content-type']?.includes('text/html') || proxyRes.headers['content-type']?.includes('application/xhtml+xml'))) {
+                        const headers = { ...proxyRes.headers };
+                        delete headers['content-length'];
+                        let body = '';
+                        proxyRes.setEncoding('utf8');
+                        proxyRes.on('data', chunk => body += chunk);
+                        proxyRes.on('end', () => {
+                            const injection = '\\n<!-- RZ ANTIGRAVITY RTL -->\\n<script src="/rz-ide-payload.js"></script>\\n';
+                            if (body.includes('</body>')) {
+                                body = body.replace('</body>', injection + '</body>');
+                            } else {
+                                body += injection;
+                            }
+                            res.writeHead(proxyRes.statusCode, headers);
+                            res.end(body);
+                        });
+                    } else {
+                        res.writeHead(proxyRes.statusCode, proxyRes.headers);
+                        proxyRes.pipe(res);
+                    }
+                });
+
+                proxyReq.on('error', (err) => {
+                    res.writeHead(502);
+                    res.end('RZ Proxy Error: ' + err.message);
+                });
+
+                req.pipe(proxyReq);
+            });
+
+            server.on('upgrade', (req, socket, head) => {
+                let targetHost = '127.0.0.1';
+                let targetPort = 7123;
+                try {
+                    const tu = new URL(__rzTargetUrl);
+                    targetHost = tu.hostname || '127.0.0.1';
+                    targetPort = parseInt(tu.port, 10) || 7123;
+                } catch(e) {}
+
+                const targetSocket = net.connect(targetPort, targetHost, () => {
+                    const reqLines = [(req.method || 'GET') + ' ' + (req.url || '/') + ' HTTP/' + (req.httpVersion || '1.1')];
+                    for (let i = 0; i < req.rawHeaders.length; i += 2) {
+                        const k = req.rawHeaders[i];
+                        let v = req.rawHeaders[i + 1];
+                        const kl = k.toLowerCase();
+                        if (kl === 'host') {
+                            v = targetHost + ':' + targetPort;
+                        } else if (kl === 'origin') {
+                            v = 'http://' + targetHost + ':' + targetPort;
+                        }
+                        reqLines.push(k + ': ' + v);
+                    }
+                    reqLines.push('', '');
+                    targetSocket.write(reqLines.join('\\r\\n'));
+                    if (head && head.length > 0) {
+                        targetSocket.write(head);
+                    }
+                    socket.pipe(targetSocket).pipe(socket);
+                });
+                targetSocket.on('error', () => socket.destroy());
+                socket.on('error', () => targetSocket.destroy());
+            });
+
+            const boundPort = await new Promise((resolve) => {
+                const preferredPort = 7198;
+                const onError = (e) => {
+                    if (e.code === 'EADDRINUSE') {
+                        server.listen(0, '127.0.0.1', () => {
+                            resolve(server.address().port);
+                        });
+                    } else {
+                        resolve(0);
+                    }
+                };
+                server.once('error', onError);
+                server.listen(preferredPort, '127.0.0.1', () => {
+                    server.removeListener('error', onError);
+                    resolve(preferredPort);
+                });
+            });
+
+            if (boundPort > 0) {
+                __rzProxyPort = boundPort;
+                __rzProxy = server;
+                try {
+                    const u = new URL(targetUrl);
+                    u.port = String(boundPort);
+                    return u.toString().replace(/\\/$/, '');
+                } catch(e) {
+                    return 'http://127.0.0.1:' + boundPort;
+                }
+            }
+            return targetUrl;
+        } catch(err) {
+            console.error('[RZ RTL] Proxy init error:', err);
+            return targetUrl;
+        }
+    };
+})();
+`;
+                extCode = proxySnippet + '\n' + extCode;
+                extCode = extCode.replace('renderIframe(a,b,c){', 'async renderIframe(a,b,c){b=globalThis.__rzStartProxy?await globalThis.__rzStartProxy(b):b;');
+                extCode = extCode.replace('async function pR(a,b){', 'async function pR(a,b){a=globalThis.__rzStartProxy?await globalThis.__rzStartProxy(a):a;');
+                fs.writeFileSync(agyExtJs, extCode, 'utf8');
+            }
+        }
 
         spinner.succeed('Successfully patched Antigravity IDE!');
         return true;

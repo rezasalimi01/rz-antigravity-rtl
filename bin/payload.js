@@ -96,6 +96,12 @@ win.webContents.on('dom-ready', () => {
                                        document.querySelector('[contenteditable="true"]') ||
                                        document.querySelector('[data-testid="conversation-view"]') ||
                                        document.querySelector('[data-testid="open-ide"]') ||
+                                       document.querySelector('[data-testid="open-editor"]') ||
+                                       document.querySelector('[data-testid="open-editor-single"]') ||
+                                       document.querySelector('[data-testid="open-editor-multi"]') ||
+                                       document.querySelector('[data-testid="open-editor-empty"]') ||
+                                       document.querySelector('[data-testid="pane-titlebar-toolbar"]') ||
+                                       document.querySelector('[data-testid="titlebar-more-actions"]') ||
                                        document.querySelector('[data-testid="install-editor"]'));
                     } catch (_) {
                         return false;
@@ -1080,7 +1086,7 @@ win.webContents.on('dom-ready', () => {
                         <svg height="14" width="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"></path></svg>
                         Star on GitHub
                       </a>
-                      <span class="rtl-version-badge">v1.1.5</span>
+                      <span class="rtl-version-badge">v1.1.6</span>
                     </div>
             \`;
 
@@ -1092,7 +1098,8 @@ win.webContents.on('dom-ready', () => {
                     || document.querySelector('[data-testid="open-editor-single"]')
                     || document.querySelector('[data-testid="open-editor-multi"]')
                     || document.querySelector('[data-testid="open-editor-empty"]')
-                    || document.querySelector('[data-testid="install-editor"]');
+                    || document.querySelector('[data-testid="install-editor"]')
+                    || document.querySelector('[data-testid="titlebar-more-actions"]');
                 if (!refBtn) return;
 
                 try {
@@ -1101,10 +1108,12 @@ win.webContents.on('dom-ready', () => {
                     if (h > 15) {
                         btn.style.setProperty('height', cs.height, 'important');
                     }
-                    const pl = parseFloat(cs.paddingLeft);
-                    const pr = parseFloat(cs.paddingRight);
-                    if (pl > 0) btn.style.setProperty('padding-left', cs.paddingLeft, 'important');
-                    if (pr > 0) btn.style.setProperty('padding-right', cs.paddingRight, 'important');
+                    if (refBtn.getAttribute('data-testid') !== 'titlebar-more-actions') {
+                        const pl = parseFloat(cs.paddingLeft);
+                        const pr = parseFloat(cs.paddingRight);
+                        if (pl > 0) btn.style.setProperty('padding-left', cs.paddingLeft, 'important');
+                        if (pr > 0) btn.style.setProperty('padding-right', cs.paddingRight, 'important');
+                    }
                     if (cs.fontSize) btn.style.setProperty('font-size', cs.fontSize, 'important');
                     if (cs.fontFamily) btn.style.setProperty('font-family', cs.fontFamily, 'important');
                     if (cs.fontWeight) btn.style.setProperty('font-weight', cs.fontWeight, 'important');
@@ -1120,14 +1129,24 @@ win.webContents.on('dom-ready', () => {
                     || document.querySelector('[data-testid="open-editor-multi"]')
                     || document.querySelector('[data-testid="open-editor-empty"]')
                     || document.querySelector('[data-testid="install-editor"]');
-                const actionsCluster = openIdeBtn?.parentElement || document.querySelector('[data-testid="titlebar-more-actions"]')?.parentElement;
+                const moreActionsBtn = document.querySelector('[data-testid="titlebar-more-actions"]');
+                const actionsCluster = openIdeBtn?.parentElement
+                    || moreActionsBtn?.parentElement
+                    || document.querySelector('[data-testid="pane-titlebar-toolbar"]')?.firstElementChild;
+
                 if (actionsCluster) {
-                    if (!widgetWrapper.isConnected || widgetWrapper.parentElement !== actionsCluster) {
-                        if (openIdeBtn && openIdeBtn.parentElement === actionsCluster) {
+                    if (openIdeBtn && openIdeBtn.parentElement === actionsCluster) {
+                        // Priority 1: Place directly between 3-dots and Open IDE (immediately before Open IDE)
+                        if (widgetWrapper.nextElementSibling !== openIdeBtn) {
                             actionsCluster.insertBefore(widgetWrapper, openIdeBtn);
-                        } else {
-                            actionsCluster.appendChild(widgetWrapper);
                         }
+                    } else if (moreActionsBtn && moreActionsBtn.parentElement === actionsCluster) {
+                        // Priority 2: In pages without Open IDE (e.g. Home screen), place immediately next to 3-dots
+                        if (moreActionsBtn.nextElementSibling !== widgetWrapper) {
+                            actionsCluster.insertBefore(widgetWrapper, moreActionsBtn.nextSibling);
+                        }
+                    } else if (!widgetWrapper.isConnected || widgetWrapper.parentElement !== actionsCluster) {
+                        actionsCluster.appendChild(widgetWrapper);
                     }
                 }
                 if (!panel.isConnected && !document.getElementById('rtl-widget-panel-portal')) {
