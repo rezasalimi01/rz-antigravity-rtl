@@ -1,7 +1,7 @@
 {
   "name": "rz-antigravity-rtl",
-  "version": "1.1.6",
-  "description": "Smart RTL patcher with UI settings for Antigravity Desktop and Antigravity IDE.",
+  "version": "1.1.7",
+  "description": "Smart RTL patcher with UI settings for Antigravity Desktop, Antigravity IDE, and VS Code Extension.",
   "main": "./bin/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",

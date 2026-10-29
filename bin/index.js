@@ -96,7 +96,7 @@ function printBanner() {
             console.log(applyGradient(line));
         }
         console.log('');
-        console.log(`\x1b[2m  RTL & UI Patcher for Antigravity & Antigravity IDE | v${pkg.version}\x1b[0m\n`);
+        console.log(`\x1b[2m  RTL & UI Patcher for Antigravity, Antigravity IDE & VS Code Extension | v${pkg.version}\x1b[0m\n`);
     } catch (err) {
         console.log(bold(cyan(`\n✨ RZ Antigravity RTL Patcher v${pkg.version}\n`)));
     }
@@ -120,6 +120,29 @@ function getDefaultIdeAppPath() {
     } else if (os.platform() === 'win32') {
         return path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Antigravity IDE', 'resources', 'app');
     }
+}
+
+function getVSCodeExtensionPath() {
+    const candidates = [
+        path.join(os.homedir(), '.vscode', 'extensions'),
+        path.join(os.homedir(), '.vscode-insiders', 'extensions')
+    ];
+    for (const baseDir of candidates) {
+        if (!fs.existsSync(baseDir)) continue;
+        try {
+            const entries = fs.readdirSync(baseDir, { withFileTypes: true });
+            const matchingDirs = entries
+                .filter(d => d.isDirectory() && d.name.startsWith('google.google-antigravity-'))
+                .map(d => path.join(baseDir, d.name))
+                .filter(dirPath => fs.existsSync(path.join(dirPath, 'extension.js')));
+
+            if (matchingDirs.length > 0) {
+                matchingDirs.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+                return matchingDirs[0];
+            }
+        } catch (e) {}
+    }
+    return null;
 }
 
 function cleanupConflictingGlobalPackages() {
@@ -172,6 +195,7 @@ const isRestore = args.includes('--restore');
 const targetAll = args.includes('--all');
 const targetAppOnly = args.includes('--app');
 const targetIdeOnly = args.includes('--ide');
+const targetVscodeOnly = args.includes('--vscode') || args.includes('--ext');
 
 if (args.includes('--help') || args.includes('-h')) {
     console.log(`
@@ -179,10 +203,11 @@ Usage:
   npx rz-antigravity-rtl [options]
 
 Options:
-  --all        Patch both Antigravity Desktop App and Antigravity IDE
+  --all        Patch Desktop App, Antigravity IDE, and VS Code Extension
   --app        Patch Antigravity Desktop App only
   --ide        Patch Antigravity IDE only
-  --restore    Restore original unpatched files (use with --app, --ide, or --all)
+  --vscode     Patch VS Code Antigravity Extension only
+  --restore    Restore original unpatched files (use with --app, --ide, --vscode, or --all)
   -h, --help   Show this help message
     `);
     process.exit(0);
@@ -572,7 +597,7 @@ async function patchIDE(ideAppPath) {
                 } catch(e) {}
 
                 const isFont = url.includes('/Vazirmatn-Variable.woff2') || url.includes('/fonts/');
-                const isHtml = !isFont && (url === '/' || url.startsWith('/?') || url.startsWith('/c/'));
+                const isStatic = isFont || url.endsWith('.js') || url.endsWith('.css') || url.endsWith('.png') || url.endsWith('.svg') || url.endsWith('.ico') || url.endsWith('.json') || url.endsWith('.woff2');
 
                 const reqHeaders = { ...req.headers };
                 reqHeaders.host = targetHost + ':' + targetPort;
@@ -595,7 +620,7 @@ async function patchIDE(ideAppPath) {
                     method: req.method,
                     headers: reqHeaders
                 }, (proxyRes) => {
-                    if (isHtml && (proxyRes.headers['content-type']?.includes('text/html') || proxyRes.headers['content-type']?.includes('application/xhtml+xml'))) {
+                    if (!isStatic && (proxyRes.headers['content-type']?.includes('text/html') || proxyRes.headers['content-type']?.includes('application/xhtml+xml'))) {
                         const headers = { ...proxyRes.headers };
                         delete headers['content-length'];
                         let body = '';
@@ -711,6 +736,348 @@ async function patchIDE(ideAppPath) {
     }
 }
 
+async function patchVSCodeExtension(extDir) {
+    console.log(bold(cyan(`\n🔌 VS Code Antigravity Extension`)));
+    console.log(dim(`   Path: ${extDir}`));
+
+    const extJs = path.join(extDir, 'extension.js');
+    const extJsBak = extJs + '.original.bak';
+    const payloadDest = path.join(extDir, 'ide-payload.js');
+    const fontDest = path.join(extDir, 'Vazirmatn-Variable.woff2');
+    const fontsDirDest = path.join(extDir, 'fonts');
+
+    if (isRestore) {
+        if (!fs.existsSync(extJsBak)) {
+            console.error(red('✖ No backup found for VS Code Extension to restore.\n'));
+            return false;
+        }
+        const spinner = ora('Restoring original extension.js...').start();
+        try {
+            fs.copyFileSync(extJsBak, extJs);
+            if (fs.existsSync(payloadDest)) {
+                try { fs.rmSync(payloadDest, { force: true }); } catch (e) {}
+            }
+            if (fs.existsSync(fontDest)) {
+                try { fs.rmSync(fontDest, { force: true }); } catch (e) {}
+            }
+            if (fs.existsSync(fontsDirDest)) {
+                try { fs.rmSync(fontsDirDest, { recursive: true, force: true }); } catch (e) {}
+            }
+            spinner.succeed('Successfully restored original VS Code Extension!');
+            return true;
+        } catch (e) {
+            spinner.fail('Failed to restore VS Code Extension.');
+            console.error(red(e.message));
+            return false;
+        }
+    }
+
+    const spinner = ora('Checking permissions and backing up extension.js...').start();
+    try {
+        fs.accessSync(extDir, fs.constants.W_OK);
+        if (!fs.existsSync(extJsBak)) {
+            fs.copyFileSync(extJs, extJsBak);
+        } else {
+            // Restore from clean backup first so re-patching applies cleanly
+            fs.copyFileSync(extJsBak, extJs);
+        }
+    } catch (e) {
+        spinner.fail('Permission Denied on extension folder.');
+        console.error(red('\nSystem Error: ' + e.message));
+        return false;
+    }
+
+    spinner.text = 'Copying RTL payload & fonts to extension folder...';
+    try {
+        const idePayloadSource = path.join(__dirname, 'ide-payload.js');
+        const fontSource = path.join(__dirname, 'Vazirmatn-Variable.woff2');
+        const fontsDirSource = path.join(__dirname, 'fonts');
+
+        let idePayloadCode = fs.readFileSync(idePayloadSource, 'utf8');
+        idePayloadCode = idePayloadCode.replace(/class="rtl-version-badge">v[^<]*</g, `class="rtl-version-badge">v${pkg.version}<`);
+        fs.writeFileSync(payloadDest, idePayloadCode, 'utf8');
+
+        if (fs.existsSync(fontSource)) {
+            fs.copyFileSync(fontSource, fontDest);
+        }
+        if (fs.existsSync(fontsDirSource)) {
+            fs.cpSync(fontsDirSource, fontsDirDest, { recursive: true });
+        }
+    } catch (e) {
+        spinner.fail('Failed to copy payload files to extension folder.');
+        console.error(red(e.message));
+        return false;
+    }
+
+    spinner.text = 'Patching extension.js for Chat Webview RTL Proxy...';
+    try {
+        let extCode = fs.readFileSync(extJsBak, 'utf8');
+
+        if (extCode.includes('renderIframe(a,b,c){')) {
+            const proxySnippet = `
+/* --- RZ ANTIGRAVITY RTL PROXY --- */
+(function() {
+    let __rzProxy = null;
+    let __rzProxyPort = 0;
+    let __rzTargetUrl = '';
+
+    globalThis.__rzStartProxy = async function(targetUrl) {
+        if (!targetUrl || typeof targetUrl !== 'string') return targetUrl;
+        try {
+            const parsed = new URL(targetUrl);
+            if (__rzProxyPort > 0 && parseInt(parsed.port, 10) === __rzProxyPort) {
+                return targetUrl;
+            }
+        } catch(e) {}
+        __rzTargetUrl = targetUrl;
+        if (__rzProxyPort > 0) {
+            try {
+                const u = new URL(targetUrl);
+                u.port = String(__rzProxyPort);
+                return u.toString().replace(/\\/$/, '');
+            } catch(e) {
+                return 'http://127.0.0.1:' + __rzProxyPort;
+            }
+        }
+
+        try {
+            const http = require('http');
+            const net = require('net');
+            const fs = require('fs');
+            const path = require('path');
+
+            const payloadPath = path.resolve(__dirname, 'ide-payload.js');
+            const fontPath = path.resolve(__dirname, 'Vazirmatn-Variable.woff2');
+            const fontsDir = path.resolve(__dirname, 'fonts');
+
+            const server = http.createServer((req, res) => {
+                const url = req.url || '/';
+
+                if (url.startsWith('/rz-ide-payload.js')) {
+                    try {
+                        const code = fs.readFileSync(payloadPath, 'utf8');
+                        res.writeHead(200, {
+                            'Content-Type': 'application/javascript; charset=utf-8',
+                            'Cache-Control': 'no-cache, no-store, must-revalidate'
+                        });
+                        res.end(code);
+                    } catch(err) {
+                        res.writeHead(500);
+                        res.end('/* Error loading payload: ' + err.message + ' */');
+                    }
+                    return;
+                }
+
+                if (url.includes('/Vazirmatn-Variable.woff2')) {
+                    try {
+                        const font = fs.readFileSync(fontPath);
+                        res.writeHead(200, {
+                            'Content-Type': 'font/woff2',
+                            'Access-Control-Allow-Origin': '*',
+                            'Cache-Control': 'public, max-age=31536000'
+                        });
+                        res.end(font);
+                    } catch(err) {
+                        res.writeHead(404);
+                        res.end();
+                    }
+                    return;
+                }
+
+                let fontSubPath = null;
+                const fIdx = url.indexOf('/fonts/');
+                if (fIdx !== -1) {
+                    fontSubPath = url.slice(fIdx + '/fonts/'.length).split(/[?#]/)[0];
+                } else if (url.startsWith('fonts/')) {
+                    fontSubPath = url.slice('fonts/'.length).split(/[?#]/)[0];
+                }
+                if (fontSubPath) {
+                    try {
+                        const subPath = decodeURIComponent(fontSubPath);
+                        const fullFontPath = path.join(fontsDir, subPath);
+                        if (fs.existsSync(fullFontPath) && fs.statSync(fullFontPath).isFile()) {
+                            const font = fs.readFileSync(fullFontPath);
+                            const ext = path.extname(fullFontPath).toLowerCase();
+                            const mimeType = ext === '.ttf' ? 'font/ttf' : (ext === '.woff' ? 'font/woff' : 'font/woff2');
+                            res.writeHead(200, {
+                                'Content-Type': mimeType,
+                                'Access-Control-Allow-Origin': '*',
+                                'Cache-Control': 'public, max-age=31536000'
+                            });
+                            res.end(font);
+                            return;
+                        }
+                    } catch(err) {}
+                }
+
+                let targetHost = '127.0.0.1';
+                let targetPort = 7123;
+                try {
+                    const tu = new URL(__rzTargetUrl);
+                    targetHost = tu.hostname || '127.0.0.1';
+                    targetPort = parseInt(tu.port, 10) || 7123;
+                } catch(e) {}
+
+                const isFont = url.includes('/Vazirmatn-Variable.woff2') || url.includes('/fonts/');
+                const isStatic = isFont || url.endsWith('.js') || url.endsWith('.css') || url.endsWith('.png') || url.endsWith('.svg') || url.endsWith('.ico') || url.endsWith('.json') || url.endsWith('.woff2');
+
+                const reqHeaders = { ...req.headers };
+                reqHeaders.host = targetHost + ':' + targetPort;
+                if (reqHeaders.origin) {
+                    reqHeaders.origin = 'http://' + targetHost + ':' + targetPort;
+                }
+                if (reqHeaders.referer) {
+                    try {
+                        const refUrl = new URL(reqHeaders.referer);
+                        refUrl.host = targetHost + ':' + targetPort;
+                        reqHeaders.referer = refUrl.toString();
+                    } catch(e) {}
+                }
+                delete reqHeaders['accept-encoding'];
+
+                const proxyReq = http.request({
+                    hostname: targetHost,
+                    port: targetPort,
+                    path: req.url,
+                    method: req.method,
+                    headers: reqHeaders
+                }, (proxyRes) => {
+                    if (!isStatic && (proxyRes.headers['content-type']?.includes('text/html') || proxyRes.headers['content-type']?.includes('application/xhtml+xml'))) {
+                        const headers = { ...proxyRes.headers };
+                        delete headers['content-length'];
+                        let body = '';
+                        proxyRes.setEncoding('utf8');
+                        proxyRes.on('data', chunk => body += chunk);
+                        proxyRes.on('end', () => {
+                            const injection = '\\n<!-- RZ ANTIGRAVITY RTL -->\\n<script src="/rz-ide-payload.js"></script>\\n';
+                            if (body.includes('</body>')) {
+                                body = body.replace('</body>', injection + '</body>');
+                            } else {
+                                body += injection;
+                            }
+                            res.writeHead(proxyRes.statusCode, headers);
+                            res.end(body);
+                        });
+                    } else {
+                        res.writeHead(proxyRes.statusCode, proxyRes.headers);
+                        proxyRes.pipe(res);
+                    }
+                });
+
+                proxyReq.on('error', (err) => {
+                    try {
+                        res.writeHead(502);
+                        res.end('Proxy Error: ' + err.message);
+                    } catch(e) {}
+                });
+
+                req.pipe(proxyReq);
+            });
+
+            server.on('upgrade', (req, socket, head) => {
+                let targetHost = '127.0.0.1';
+                let targetPort = 7123;
+                try {
+                    const tu = new URL(__rzTargetUrl);
+                    targetHost = tu.hostname || '127.0.0.1';
+                    targetPort = parseInt(tu.port, 10) || 7123;
+                } catch(e) {}
+
+                let rawReq = req.method + ' ' + (req.url || '/') + ' HTTP/1.1\\r\\n';
+                const headers = req.rawHeaders || [];
+                let hasHost = false;
+                for (let i = 0; i < headers.length; i += 2) {
+                    const key = headers[i];
+                    let val = headers[i + 1] || '';
+                    const lowerKey = key.toLowerCase();
+                    if (lowerKey === 'host') {
+                        val = targetHost + ':' + targetPort;
+                        hasHost = true;
+                    } else if (lowerKey === 'origin') {
+                        val = 'http://' + targetHost + ':' + targetPort;
+                    }
+                    rawReq += key + ': ' + val + '\\r\\n';
+                }
+                if (!hasHost) {
+                    rawReq += 'Host: ' + targetHost + ':' + targetPort + '\\r\\n';
+                }
+                rawReq += '\\r\\n';
+
+                const targetSocket = net.connect(targetPort, targetHost, () => {
+                    targetSocket.write(rawReq);
+                    if (head && head.length > 0) {
+                        targetSocket.write(head);
+                    }
+                    targetSocket.pipe(socket);
+                    socket.pipe(targetSocket);
+                });
+
+                targetSocket.on('error', () => {
+                    try { socket.destroy(); } catch(e) {}
+                });
+                socket.on('error', () => {
+                    try { targetSocket.destroy(); } catch(e) {}
+                });
+            });
+
+            const boundPort = await new Promise((resolve) => {
+                const preferredPort = 7196;
+                const onError = () => {
+                    server.removeListener('error', onError);
+                    try {
+                        server.listen(0, '127.0.0.1', () => {
+                            const addr = server.address();
+                            resolve(typeof addr === 'object' && addr ? addr.port : 0);
+                        });
+                    } catch(err) {
+                        resolve(0);
+                    }
+                };
+                server.once('error', onError);
+                server.listen(preferredPort, '127.0.0.1', () => {
+                    server.removeListener('error', onError);
+                    resolve(preferredPort);
+                });
+            });
+
+            if (boundPort > 0) {
+                __rzProxyPort = boundPort;
+                __rzProxy = server;
+                try {
+                    const u = new URL(targetUrl);
+                    u.port = String(boundPort);
+                    return u.toString().replace(/\\/$/, '');
+                } catch(e) {
+                    return 'http://127.0.0.1:' + boundPort;
+                }
+            }
+            return targetUrl;
+        } catch(err) {
+            console.error('[RZ RTL] Proxy init error:', err);
+            return targetUrl;
+        }
+    };
+})();
+`;
+            extCode = proxySnippet + '\n' + extCode;
+            extCode = extCode.replace('renderIframe(a,b,c){', 'async renderIframe(a,b,c){b=globalThis.__rzStartProxy?await globalThis.__rzStartProxy(b):b;');
+            if (extCode.includes('async function DR(a,b){')) {
+                extCode = extCode.replace('async function DR(a,b){', 'async function DR(a,b){a=globalThis.__rzStartProxy?await globalThis.__rzStartProxy(a):a;');
+            } else if (extCode.includes('async function pR(a,b){')) {
+                extCode = extCode.replace('async function pR(a,b){', 'async function pR(a,b){a=globalThis.__rzStartProxy?await globalThis.__rzStartProxy(a):a;');
+            }
+            fs.writeFileSync(extJs, extCode, 'utf8');
+        }
+
+        spinner.succeed('Successfully patched VS Code Antigravity Extension!');
+        return true;
+    } catch (e) {
+        spinner.fail('Failed to patch VS Code Extension.');
+        console.error(red(e.message));
+        return false;
+    }
+}
+
 async function main() {
     if (!isRestore) {
         cleanupConflictingGlobalPackages();
@@ -718,31 +1085,56 @@ async function main() {
 
     const defaultAppAsar = getDefaultAppAsarPath();
     const defaultIdeApp = getDefaultIdeAppPath();
+    const defaultVscodeExt = getVSCodeExtensionPath();
 
     const appFound = fs.existsSync(defaultAppAsar);
     const ideFound = fs.existsSync(defaultIdeApp);
+    const vscodeFound = defaultVscodeExt && fs.existsSync(defaultVscodeExt);
 
     let selectedTargets = [];
 
     if (targetAll) {
-        selectedTargets = ['app', 'ide'];
+        selectedTargets = [];
+        if (appFound) selectedTargets.push('app');
+        if (ideFound) selectedTargets.push('ide');
+        if (vscodeFound) selectedTargets.push('vscode');
+        if (selectedTargets.length === 0) {
+            selectedTargets = ['app', 'ide', 'vscode'];
+        }
     } else if (targetAppOnly) {
         selectedTargets = ['app'];
     } else if (targetIdeOnly) {
         selectedTargets = ['ide'];
+    } else if (targetVscodeOnly) {
+        selectedTargets = ['vscode'];
     } else {
-        if (appFound && ideFound) {
+        const anyFound = appFound || ideFound || vscodeFound;
+
+        if (anyFound) {
+            const detectedList = [];
+            if (appFound) detectedList.push('Desktop');
+            if (ideFound) detectedList.push('IDE');
+            if (vscodeFound) detectedList.push('VS Code Extension');
+            console.log(blue(`ℹ Detected installed applications: ${detectedList.join(', ')}`));
+
+            const choices = [
+                { title: 'All Applications (Desktop, IDE & VS Code Extension) [Recommended]', value: 'all' }
+            ];
+            if (appFound) choices.push({ title: 'Antigravity Desktop App only', value: 'app' });
+            if (ideFound) choices.push({ title: 'Antigravity IDE only', value: 'ide' });
+            if (vscodeFound) choices.push({ title: 'VS Code Antigravity Extension only', value: 'vscode' });
+
+            if (!appFound) choices.push({ title: 'Antigravity Desktop App only (custom path)', value: 'app' });
+            if (!ideFound) choices.push({ title: 'Antigravity IDE only (custom path)', value: 'ide' });
+            if (!vscodeFound) choices.push({ title: 'VS Code Antigravity Extension only (custom path)', value: 'vscode' });
+
             const response = await prompts({
                 type: 'select',
                 name: 'target',
                 message: isRestore
                     ? 'Which application would you like to restore?'
                     : 'Which application would you like to patch with RZ Antigravity RTL?',
-                choices: [
-                    { title: 'Both Antigravity Desktop & Antigravity IDE (Recommended)', value: 'both' },
-                    { title: 'Antigravity Desktop App only', value: 'app' },
-                    { title: 'Antigravity IDE only', value: 'ide' }
-                ],
+                choices: choices,
                 initial: 0
             });
 
@@ -751,23 +1143,27 @@ async function main() {
                 process.exit(0);
             }
 
-            if (response.target === 'both') selectedTargets = ['app', 'ide'];
-            else selectedTargets = [response.target];
-        } else if (appFound && !ideFound) {
-            console.log(blue('ℹ Found Antigravity Desktop App. (Antigravity IDE not detected at default location)'));
-            selectedTargets = ['app'];
-        } else if (!appFound && ideFound) {
-            console.log(blue('ℹ Found Antigravity IDE. (Antigravity Desktop App not detected at default location)'));
-            selectedTargets = ['ide'];
+            if (response.target === 'all') {
+                selectedTargets = [];
+                if (appFound) selectedTargets.push('app');
+                if (ideFound) selectedTargets.push('ide');
+                if (vscodeFound) selectedTargets.push('vscode');
+                if (selectedTargets.length === 0) {
+                    selectedTargets = ['app', 'ide', 'vscode'];
+                }
+            } else {
+                selectedTargets = [response.target];
+            }
         } else {
-            console.log(yellow('⚠ Could not find Antigravity Desktop or IDE at default locations.'));
+            console.log(yellow('⚠ Could not find Antigravity Desktop, IDE, or VS Code Extension at default locations.'));
             const response = await prompts({
                 type: 'select',
                 name: 'manualTarget',
                 message: 'Select which application you want to patch manually:',
                 choices: [
                     { title: 'Antigravity Desktop App (specify app.asar)', value: 'app' },
-                    { title: 'Antigravity IDE (specify resources/app folder)', value: 'ide' }
+                    { title: 'Antigravity IDE (specify resources/app folder)', value: 'ide' },
+                    { title: 'VS Code Antigravity Extension (specify extension folder)', value: 'vscode' }
                 ]
             });
 
@@ -814,6 +1210,22 @@ async function main() {
             }
             const ok = await patchIDE(idePath);
             if (ok) successCount++;
+        } else if (target === 'vscode') {
+            let vscodePath = defaultVscodeExt;
+            if (!vscodePath || !fs.existsSync(vscodePath)) {
+                const response = await prompts({
+                    type: 'text',
+                    name: 'customPath',
+                    message: 'Please enter the full path to VS Code Antigravity extension folder:'
+                });
+                if (!response.customPath || !fs.existsSync(response.customPath)) {
+                    console.error(red('✖ Invalid path. Skipping VS Code Extension.\n'));
+                    continue;
+                }
+                vscodePath = response.customPath;
+            }
+            const ok = await patchVSCodeExtension(vscodePath);
+            if (ok) successCount++;
         }
     }
 
@@ -831,6 +1243,20 @@ function getRunningAntigravityProcesses() {
     }
 }
 
+function getRunningVSCodeProcesses() {
+    try {
+        if (os.platform() === 'win32') {
+            const out = execSync('tasklist /FI "IMAGENAME eq Code.exe" /FO CSV /NH', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+            return out.includes('Code.exe');
+        } else {
+            const out = execSync('pgrep -i "Code" || true', { encoding: 'utf8' });
+            return out.trim().length > 0;
+        }
+    } catch (e) {
+        return false;
+    }
+}
+
     if (successCount > 0) {
         if (isRestore) {
             console.log(green('\n✅ Restore completed successfully! Please restart the application(s).\n'));
@@ -838,10 +1264,11 @@ function getRunningAntigravityProcesses() {
             console.log(green('\n✨ RZ Antigravity RTL features enabled! Please restart your application(s) to enjoy.\n'));
         }
 
-        if (getRunningAntigravityProcesses()) {
-            console.log(yellow('⚠️  NOTICE: Antigravity or Antigravity IDE is currently running in the background!'));
-            console.log(yellow('   Electron apps minimize to the Windows System Tray (near the clock) when closed.'));
-            console.log(yellow('   To apply changes, please right-click the tray icon and Quit, or restart them via Task Manager.\n'));
+        const runningAnti = getRunningAntigravityProcesses();
+        const runningCode = getRunningVSCodeProcesses();
+        if (runningAnti || runningCode) {
+            console.log(yellow('⚠️  NOTICE: Antigravity, Antigravity IDE, or VS Code is currently running in the background!'));
+            console.log(yellow('   To apply changes, please restart the respective application(s).\n'));
         }
     }
 }

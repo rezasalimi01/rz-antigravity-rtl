@@ -621,31 +621,37 @@
             ? `'${codeFont}', ${defaultCodeStack}`
             : defaultCodeStack;
 
+        const isChatWebview = !document.querySelector('.monaco-workbench');
+
         const forceRtlRule = (isRTL && forceRTL) ? `
-            .antigravity-agent-side-panel .prose > *:not(pre):not(code),
+            [data-testid="conversation-view"] p:not(pre *):not(code *):not([class*="font-mono"] *),
+            [data-testid="conversation-view"] li:not(pre *):not(code *):not([class*="font-mono"] *),
+            [data-testid="conversation-view"] h1, [data-testid="conversation-view"] h2, [data-testid="conversation-view"] h3,
+            [data-testid="conversation-view"] h4, [data-testid="conversation-view"] h5, [data-testid="conversation-view"] h6,
+            [data-testid="conversation-view"] blockquote:not(pre *):not(code *),
+            [data-testid="conversation-view"] label:not(pre *):not(code *),
             [data-testid="conversation-view"] .prose > *:not(pre):not(code),
-            .part.auxiliarybar .prose > *:not(pre):not(code),
-            .agent-driven-pane .prose > *:not(pre):not(code),
-            .antigravity-agent-side-panel [data-testid="chat-message"] > *:not(pre):not(code),
             [data-testid="conversation-view"] [data-testid="chat-message"] > *:not(pre):not(code),
-            .part.auxiliarybar [data-testid="chat-message"] > *:not(pre):not(code),
-            .agent-driven-pane [data-testid="chat-message"] > *:not(pre):not(code),
-            .antigravity-agent-side-panel .markdown-body > *:not(pre):not(code),
-            [data-testid="conversation-view"] .markdown-body > *:not(pre):not(code),
-            .part.auxiliarybar .markdown-body > *:not(pre):not(code),
-            .antigravity-agent-side-panel .leading-relaxed > *:not(pre):not(code),
-            [data-testid="conversation-view"] .leading-relaxed > *:not(pre):not(code),
-            .part.auxiliarybar .leading-relaxed > *:not(pre):not(code),
-            .antigravity-agent-side-panel [data-testid="user-input-step"],
-            .antigravity-agent-side-panel [data-testid="user-input-step"] > *:not(pre):not(code),
             [data-testid="conversation-view"] [data-testid="user-input-step"],
             [data-testid="conversation-view"] [data-testid="user-input-step"] > *:not(pre):not(code),
-            .antigravity-agent-side-panel div:has(> [role="radiogroup"]),
             [data-testid="conversation-view"] div:has(> [role="radiogroup"]),
-            .antigravity-agent-side-panel label[for^="ask-opt-"],
-            [data-testid="conversation-view"] label[for^="ask-opt-"],
+            .antigravity-agent-side-panel p:not(pre *):not(code *):not([class*="font-mono"] *),
+            .antigravity-agent-side-panel li:not(pre *):not(code *):not([class*="font-mono"] *),
+            .antigravity-agent-side-panel h1, .antigravity-agent-side-panel h2, .antigravity-agent-side-panel h3,
+            .antigravity-agent-side-panel .prose > *:not(pre):not(code),
+            .antigravity-agent-side-panel [data-testid="chat-message"] > *:not(pre):not(code),
+            .antigravity-agent-side-panel [data-testid="user-input-step"],
+            .antigravity-agent-side-panel [data-testid="user-input-step"] > *:not(pre):not(code),
+            .part.auxiliarybar [data-testid="conversation-view"] p:not(pre *):not(code *),
             .interactive-session .value > *:not(pre):not(code),
-            .monaco-chat-response > *:not(pre):not(code) {
+            .monaco-chat-response > *:not(pre):not(code)${isChatWebview ? `,
+            #root [data-testid="conversation-view"] p:not(pre *):not(code *),
+            #root [data-testid="conversation-view"] li:not(pre *):not(code *),
+            #root .prose p:not(pre *):not(code *),
+            #root .prose li:not(pre *):not(code *),
+            #root [data-testid="chat-message"] p:not(pre *):not(code *),
+            #root [data-testid="chat-message"] li:not(pre *):not(code *),
+            #root [data-testid="user-input-step"] div:not(pre *):not(code *)` : ''} {
                 direction: rtl !important;
                 text-align: right !important;
                 unicode-bidi: isolate !important;
@@ -653,11 +659,47 @@
         ` : '';
 
         rtlStyle.textContent = `
-            /* Dynamic CSS Custom Properties for Chat */
-            :root, :host, body {
-                ${enFont ? `--font-sans: '${enFont}', var(--vscode-font-family, system-ui, sans-serif) !important;` : ''}
-                ${codeFont ? `--editor-font-family: '${codeFont}', var(--font-mono, monospace) !important; --font-mono: '${codeFont}', monospace !important;` : ''}
+            ${isChatWebview ? `
+            /* Webview Iframe: Apply Typography & Variables to entire chat environment */
+            :root, :host, html, body, #root, body[data-agy-font] {
+                --font-sans: ${textFontFamily} !important;
+                --default-font-family: ${textFontFamily} !important;
+                --font-mono: ${codeFontStack} !important;
+                --default-mono-font-family: ${codeFontStack} !important;
+                --editor-font-family: ${codeFontStack} !important;
+                font-family: ${textFontFamily} !important;
             }
+
+            #root,
+            #root button,
+            #root input,
+            #root textarea,
+            #root select,
+            #root p,
+            #root span:not(pre *):not(code *):not([class*="font-mono"]):not([class*="code"]):not(kbd):not(samp),
+            #root div:not(pre *):not(code *):not([class*="font-mono"]):not([class*="code"]):not(kbd):not(samp),
+            #root label,
+            #root a,
+            #root li,
+            #root ::placeholder,
+            #root [data-placeholder] {
+                font-family: ${textFontFamily} !important;
+            }
+            ` : `
+            /* IDE Main Window: Scoped to Chat Panel and auxiliary bar */
+            .antigravity-agent-side-panel,
+            [data-view-id="antigravity.agentSidePanel"],
+            [data-testid="conversation-view"],
+            .agent-driven-pane,
+            .part.auxiliarybar {
+                --font-sans: ${textFontFamily} !important;
+                --default-font-family: ${textFontFamily} !important;
+                --font-mono: ${codeFontStack} !important;
+                --default-mono-font-family: ${codeFontStack} !important;
+                --editor-font-family: ${codeFontStack} !important;
+                font-family: ${textFontFamily} !important;
+            }
+            `}
 
             /* Bundled Persian Fonts */
             @font-face {
@@ -842,8 +884,8 @@
             }
 
             /* 
-             * STRICT ISOLATION:
-             * Apply RTL typography ONLY to Chat Panels and User Inputs.
+             * STRICT CHAT ISOLATION & FULL CHAT COVERAGE:
+             * Applies Persian, English, and Code typography to the entire chat environment.
              * Main Monaco Code Editor, Tree views, Menus and Tabs stay 100% UNTOUCHED.
              */
             .antigravity-agent-side-panel,
@@ -851,21 +893,35 @@
             [data-testid="conversation-view"],
             .agent-driven-pane,
             .part.auxiliarybar,
-            .antigravity-agent-side-panel .prose,
-            [data-testid="conversation-view"] .prose,
-            .part.auxiliarybar .prose,
-            .prose,
-            [data-testid="chat-message"],
-            .markdown-body,
-            .leading-relaxed,
-            [contenteditable="true"],
-            [data-lexical-text="true"],
-            label[for^="ask-opt-"],
-            textarea[data-testid="ask-question-writein"],
-            .interactive-session .value,
-            .monaco-chat-request,
-            .monaco-chat-response,
-            .interactive-input-part {
+            .antigravity-agent-side-panel *,
+            [data-testid="conversation-view"] * {
+                font-family: ${textFontFamily};
+            }
+
+            /* Buttons, inputs, text elements in chat */
+            [data-testid="conversation-view"] button,
+            [data-testid="conversation-view"] input,
+            [data-testid="conversation-view"] textarea,
+            [data-testid="conversation-view"] select,
+            [data-testid="conversation-view"] p,
+            [data-testid="conversation-view"] span:not(pre *):not(code *):not([class*="font-mono"]):not([class*="code"]):not(kbd):not(samp),
+            [data-testid="conversation-view"] div:not(pre *):not(code *):not([class*="font-mono"]):not([class*="code"]):not(kbd):not(samp),
+            [data-testid="conversation-view"] label,
+            [data-testid="conversation-view"] a,
+            [data-testid="conversation-view"] li,
+            [data-testid="conversation-view"] [data-placeholder],
+            [data-testid="conversation-view"] ::placeholder,
+            .antigravity-agent-side-panel button,
+            .antigravity-agent-side-panel input,
+            .antigravity-agent-side-panel textarea,
+            .antigravity-agent-side-panel select,
+            .antigravity-agent-side-panel p,
+            .antigravity-agent-side-panel span:not(pre *):not(code *):not([class*="font-mono"]):not([class*="code"]):not(kbd):not(samp),
+            .antigravity-agent-side-panel div:not(pre *):not(code *):not([class*="font-mono"]):not([class*="code"]):not(kbd):not(samp),
+            .antigravity-agent-side-panel label,
+            .antigravity-agent-side-panel a,
+            .antigravity-agent-side-panel li,
+            .antigravity-agent-side-panel ::placeholder {
                 font-family: ${textFontFamily} !important;
             }
 
@@ -889,7 +945,11 @@
             [data-testid="conversation-view"] [contenteditable="true"] p,
             .part.auxiliarybar [contenteditable="true"] p,
             .interactive-session .value,
-            .monaco-chat-response {
+            .monaco-chat-response${isChatWebview ? `,
+            #root [data-testid="conversation-view"] p,
+            #root [data-testid="conversation-view"] li,
+            #root .prose p,
+            #root .prose li` : ''} {
                 font-size: ${fs}px !important;
             }
 
@@ -913,7 +973,12 @@
             .antigravity-agent-side-panel ol,
             [data-testid="conversation-view"] ol,
             .interactive-session p,
-            .monaco-chat-response p {
+            .monaco-chat-response p${isChatWebview ? `,
+            #root [data-testid="conversation-view"] p,
+            #root [data-testid="conversation-view"] li,
+            #root [data-testid="conversation-view"] h1,
+            #root [data-testid="conversation-view"] h2,
+            #root [data-testid="conversation-view"] h3` : ''} {
                 unicode-bidi: plaintext;
                 text-align: start;
             }
@@ -980,13 +1045,18 @@
             /* Code Blocks and Monospaced Text in Chat (Strictly LTR and Monospace) */
             pre,
             code,
+            kbd,
+            samp,
+            .font-mono,
+            [class*="font-mono"],
+            [class*="code-block"],
+            [class*="codeBlock"],
+            [data-testid*="code"],
             pre *,
             code *,
-            .code-block,
-            .code-block *,
-            .font-mono,
-            kbd,
-            samp {
+            .font-mono *,
+            [class*="font-mono"] *,
+            [class*="code-block"] * {
                 unicode-bidi: isolate !important;
                 direction: ltr !important;
                 text-align: left !important;
@@ -996,10 +1066,7 @@
             /* Chat Line Height */
             .antigravity-agent-side-panel .leading-relaxed,
             [data-testid="conversation-view"] .leading-relaxed,
-            .part.auxiliarybar .leading-relaxed {
-                line-height: ${lh} !important;
-            }
-
+            .part.auxiliarybar .leading-relaxed,
             .antigravity-agent-side-panel .prose p, 
             [data-testid="conversation-view"] .prose p,
             .antigravity-agent-side-panel .prose li, 
@@ -1024,7 +1091,11 @@
             [data-testid="conversation-view"] label[for^="ask-opt-"],
             .part.auxiliarybar .prose p,
             .part.auxiliarybar [contenteditable="true"],
-            .interactive-session .value p {
+            .interactive-session .value p${isChatWebview ? `,
+            #root [data-testid="conversation-view"] p,
+            #root [data-testid="conversation-view"] li,
+            #root .prose p,
+            #root .prose li` : ''} {
                 line-height: ${lh} !important;
             }
 
@@ -1038,6 +1109,24 @@
                 unicode-bidi: isolate !important;
                 text-align: start !important;
             }
+
+            /* Strict Protection for Monaco Editor and Outer Workbench */
+            .monaco-editor,
+            .monaco-editor *,
+            .part.sidebar,
+            .part.sidebar *,
+            .part.editor,
+            .part.editor *,
+            .part.statusbar,
+            .part.statusbar *,
+            .part.activitybar,
+            .part.activitybar *,
+            .part.panel:not(.part.auxiliarybar),
+            .part.panel:not(.part.auxiliarybar) *,
+            .tabs-and-actions-container,
+            .tabs-and-actions-container * {
+                /* Never inherit chat fonts or directions */
+            }
         `;
     };
 
@@ -1050,24 +1139,33 @@
     function updateDir() {
         if (!isRTL) return;
 
-        const inputs = document.querySelectorAll(`
-            [data-testid="conversation-view"] [contenteditable="true"] p,
-            [data-testid="conversation-view"] [contenteditable="true"],
-            [data-testid="conversation-view"] textarea,
-            .antigravity-agent-side-panel [contenteditable="true"] p,
-            .antigravity-agent-side-panel [contenteditable="true"],
-            .antigravity-agent-side-panel textarea[data-testid="ask-question-writein"],
-            .part.auxiliarybar [contenteditable="true"] p,
-            .part.auxiliarybar [contenteditable="true"],
-            .part.auxiliarybar textarea,
-            .interactive-input-part [contenteditable="true"],
-            .interactive-input-part textarea
-        `);
+        const isChatWebview = !document.querySelector('.monaco-workbench');
 
+        const inputSelectors = [
+            '[data-testid="conversation-view"] [contenteditable="true"] p',
+            '[data-testid="conversation-view"] [contenteditable="true"]',
+            '[data-testid="conversation-view"] textarea',
+            '.antigravity-agent-side-panel [contenteditable="true"] p',
+            '.antigravity-agent-side-panel [contenteditable="true"]',
+            '.antigravity-agent-side-panel textarea',
+            '.part.auxiliarybar [contenteditable="true"] p',
+            '.part.auxiliarybar [contenteditable="true"]',
+            '.part.auxiliarybar textarea',
+            '.interactive-input-part [contenteditable="true"]',
+            '.interactive-input-part textarea'
+        ];
+        if (isChatWebview) {
+            inputSelectors.push('#root [contenteditable="true"] p', '#root [contenteditable="true"]', '#root textarea');
+        }
+
+        const inputs = document.querySelectorAll(inputSelectors.join(',\n'));
         inputs.forEach(el => {
+            if (el.closest('.monaco-editor, .part.sidebar, .part.editor, .part.panel:not(.part.auxiliarybar)')) return;
             const raw = el.tagName === 'TEXTAREA' ? el.value : el.textContent;
             const text = (raw || '').replace(/[\u200B-\u200F\uFEFF]/g, '').trim();
-            if (text.length > 0) {
+            if (forceRTL) {
+                if (el.getAttribute('dir') !== 'rtl') el.setAttribute('dir', 'rtl');
+            } else if (text.length > 0) {
                 const isRtlText = /^[^a-zA-Z]*[\u0591-\u07FF\uFB1D-\uFDFD\uFE70-\uFEFC]/.test(text);
                 const newDir = isRtlText ? 'rtl' : 'ltr';
                 if (el.getAttribute('dir') !== newDir) el.setAttribute('dir', newDir);
@@ -1076,38 +1174,47 @@
             }
         });
 
-        const chatOutputs = document.querySelectorAll(`
-            [data-testid="conversation-view"] .prose > *,
-            [data-testid="conversation-view"] [data-testid="chat-message"] > *,
-            [data-testid="conversation-view"] .markdown-body > *,
-            [data-testid="conversation-view"] .leading-relaxed > *,
-            [data-testid="conversation-view"] [data-testid="user-input-step"],
-            [data-testid="conversation-view"] [data-testid="user-input-step"] > *,
-            [data-testid="conversation-view"] div:has(> [role="radiogroup"]),
-            [data-testid="conversation-view"] label[for^="ask-opt-"],
-            .antigravity-agent-side-panel .prose > *,
-            .antigravity-agent-side-panel [data-testid="chat-message"] > *,
-            .antigravity-agent-side-panel .markdown-body > *,
-            .antigravity-agent-side-panel .leading-relaxed > *,
-            .antigravity-agent-side-panel [data-testid="user-input-step"],
-            .antigravity-agent-side-panel [data-testid="user-input-step"] > *,
-            .antigravity-agent-side-panel div:has(> [role="radiogroup"]),
-            .antigravity-agent-side-panel label[for^="ask-opt-"],
-            .part.auxiliarybar .prose > *,
-            .part.auxiliarybar [data-testid="chat-message"] > *,
-            .part.auxiliarybar .markdown-body > *,
-            .part.auxiliarybar .leading-relaxed > *,
-            .part.auxiliarybar [data-testid="user-input-step"],
-            .part.auxiliarybar [data-testid="user-input-step"] > *,
-            .part.auxiliarybar div:has(> [role="radiogroup"]),
-            .part.auxiliarybar label[for^="ask-opt-"],
-            .interactive-session .value > *,
-            .monaco-chat-response > *
-        `);
+        const outputSelectors = [
+            '[data-testid="conversation-view"] p',
+            '[data-testid="conversation-view"] li',
+            '[data-testid="conversation-view"] h1, [data-testid="conversation-view"] h2, [data-testid="conversation-view"] h3',
+            '[data-testid="conversation-view"] h4, [data-testid="conversation-view"] h5, [data-testid="conversation-view"] h6',
+            '[data-testid="conversation-view"] blockquote',
+            '[data-testid="conversation-view"] label',
+            '[data-testid="conversation-view"] .prose > *',
+            '[data-testid="conversation-view"] [data-testid="chat-message"] > *',
+            '[data-testid="conversation-view"] [data-testid="user-input-step"]',
+            '[data-testid="conversation-view"] [data-testid="user-input-step"] > *',
+            '[data-testid="conversation-view"] div:has(> [role="radiogroup"])',
+            '.antigravity-agent-side-panel p',
+            '.antigravity-agent-side-panel li',
+            '.antigravity-agent-side-panel h1, .antigravity-agent-side-panel h2, .antigravity-agent-side-panel h3',
+            '.antigravity-agent-side-panel blockquote',
+            '.antigravity-agent-side-panel label',
+            '.antigravity-agent-side-panel .prose > *',
+            '.antigravity-agent-side-panel [data-testid="chat-message"] > *,',
+            '.antigravity-agent-side-panel [data-testid="user-input-step"]',
+            '.antigravity-agent-side-panel [data-testid="user-input-step"] > *',
+            '.part.auxiliarybar [data-testid="conversation-view"] p',
+            '.part.auxiliarybar [data-testid="conversation-view"] li'
+        ];
+        if (isChatWebview) {
+            outputSelectors.push(
+                '#root [data-testid="conversation-view"] p',
+                '#root [data-testid="conversation-view"] li',
+                '#root .prose p',
+                '#root .prose li',
+                '#root [data-testid="chat-message"] p',
+                '#root [data-testid="chat-message"] li',
+                '#root [data-testid="user-input-step"] div'
+            );
+        }
 
+        const chatOutputs = document.querySelectorAll(outputSelectors.join(',\n'));
         chatOutputs.forEach(el => {
             if (el.tagName === 'PRE' || el.tagName === 'CODE') return;
-            if (el.closest('pre, code, .cursor-edit.text-secondary-foreground')) return;
+            if (el.closest('pre, code, .cursor-edit.text-secondary-foreground, [class*="font-mono"], .rtl-widget-panel-portal')) return;
+            if (el.closest('.monaco-editor, .part.sidebar, .part.editor, .part.panel:not(.part.auxiliarybar)')) return;
 
             const text = (el.textContent || '').replace(/[\u200B-\u200F\uFEFF]/g, '').trim();
             let dir = 'auto';
@@ -1308,7 +1415,7 @@
                 <svg height="14" width="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"></path></svg>
                 Star on GitHub
               </a>
-              <span class="rtl-version-badge">v1.1.6</span>
+              <span class="rtl-version-badge">v1.1.7</span>
             </div>
     `);
 
@@ -1748,10 +1855,11 @@
             .part.auxiliarybar [dir],
             .agent-driven-pane [dir],
             [data-testid="chat-message"] [dir],
-            .prose [dir]
+            .prose [dir],
+            #root [dir]
         `).forEach(el => el.removeAttribute('dir'));
         document.querySelectorAll('[dir]').forEach(el => {
-            if (!el.closest('.monaco-editor') && !el.closest('.part.sidebar')) el.removeAttribute('dir');
+            if (!el.closest('.monaco-editor') && !el.closest('.part.sidebar') && !el.closest('.part.editor') && !el.closest('.part.panel:not(.part.auxiliarybar)')) el.removeAttribute('dir');
         });
         window.dispatchEvent(new Event('resize'));
     }
