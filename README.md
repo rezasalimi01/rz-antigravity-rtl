@@ -1,7 +1,7 @@
-# RZ Antigravity RTL — RTL Support for Antigravity Desktop & Antigravity IDE
+# RZ Antigravity RTL — RTL Support for Antigravity App, Antigravity IDE & VS Code Extension
 
 <p align="center">
-  <img src="banner.png" alt="RZ Antigravity RTL — RTL Support for Antigravity Desktop & Antigravity IDE" width="100%">
+  <img src="banner.png" alt="RZ Antigravity RTL — RTL Support for Antigravity App, Antigravity IDE & VS Code Extension" width="100%">
 </p>
 
 [![npm version](https://img.shields.io/npm/v/rz-antigravity-rtl.svg?color=D0FE1B&labelColor=000000)](https://www.npmjs.com/package/rz-antigravity-rtl)
@@ -9,16 +9,17 @@
 [![GitHub](https://img.shields.io/badge/GitHub-rezasalimi01%2Frz--antigravity--rtl-D0FE1B?logo=github&labelColor=000000)](https://github.com/rezasalimi01/rz-antigravity-rtl)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **Antigravity RTL & Antigravity IDE RTL**: High-performance Right-to-Left (RTL) engine and typography customizer for both **Antigravity Desktop** and **Antigravity IDE**.
+> **Antigravity RTL**: High-performance Right-to-Left (RTL) engine and typography customizer for **Antigravity App**, **Antigravity IDE**, and the **VS Code Extension**.
 
-A smart, automated CLI patcher bringing native-feeling Persian (Farsi), Arabic, Hebrew, and RTL support to Google Antigravity applications. Features 22 curated offline webfonts, strict Monaco code editor isolation, and an interactive floating UI to configure fonts, line heights, font sizes, and behavior on the fly.
+A smart, automated CLI patcher bringing native-feeling Persian (Farsi), Arabic, Hebrew, and RTL support to Google Antigravity applications (Desktop, Antigravity IDE, and the official Google Antigravity extension for VS Code / VS Code Insiders). Features 22 curated offline webfonts, strict Monaco code editor isolation, and an interactive floating UI to configure fonts, line heights, font sizes, and behavior on the fly.
 
 ---
 
 ## ✨ Features
 
-- **Dual Support**: Seamlessly patches both **Antigravity Desktop** and **Antigravity IDE**.
-- **Strict Code Editor Isolation**: In Antigravity IDE, only the chat panel (`antigravity-agent-side-panel`, inputs, and questions) is RTL-patched. The Monaco code editor, file explorer, status bar, and code blocks (`<pre>`, `<code>`) remain strictly LTR and untouched!
+- **Triple Support**: Seamlessly patches **Antigravity App**, **Antigravity IDE**, and the official **VS Code Google Antigravity Extension** (`google.google-antigravity-*` in both VS Code and VS Code Insiders).
+- **Strict Code Editor Isolation**: In Antigravity IDE and VS Code, only the chat panel (`antigravity-agent-side-panel`, inputs, and questions) is RTL-patched. The Monaco code editor, file explorer, status bar, and code blocks (`<pre>`, `<code>`) remain strictly LTR and untouched!
+- **Full Chat Typography Coverage**: Custom Persian, English, and Code fonts apply cleanly across the entire chat experience — user/agent messages, prompt input editor, action buttons, tool execution cards, and subagent status badges.
 - **Neon Volt & Pitch Black Theme**: Modern obsidian & pitch black design (`#000000`) with vibrant electric lime accents (`#D0FE1B`) for maximum visual contrast and readability.
 - **Fluid UI & Custom Spring Dropdowns**: Custom animated dropdown menus that open with smooth spring physics instead of rigid native OS selects.
 - **Micro-Animations & Auto-Reset**: Live slider numbers pulse with a responsive micro-animation when dragging and automatically return to their rest state after 300ms.
@@ -45,24 +46,30 @@ npx rz-antigravity-rtl
 ```
 
 An interactive menu will detect your installed applications and let you choose:
-1. **Both Antigravity Desktop & Antigravity IDE (Recommended)**
-2. **Antigravity Desktop App only**
+1. **All Applications (Desktop, IDE & VS Code Extension) [Recommended]**
+2. **Antigravity App App only**
 3. **Antigravity IDE only**
+4. **VS Code Antigravity Extension only**
 
 ### Command-Line Flags
 
 ```bash
-# Patch both Desktop and IDE automatically
+# Patch all installed applications automatically (Desktop, IDE & VS Code Extension)
 npx rz-antigravity-rtl --all
+
+# Patch only the VS Code Extension (VS Code / VS Code Insiders)
+npx rz-antigravity-rtl --vscode
+# or alias: npx rz-antigravity-rtl --ext
 
 # Patch only Antigravity IDE
 npx rz-antigravity-rtl --ide
 
-# Patch only Antigravity Desktop
+# Patch only Antigravity App
 npx rz-antigravity-rtl --app
 
 # Restore original unpatched files
 npx rz-antigravity-rtl --restore
+npx rz-antigravity-rtl --vscode --restore
 npx rz-antigravity-rtl --ide --restore
 npx rz-antigravity-rtl --app --restore
 ```
@@ -87,7 +94,7 @@ sudo npx rz-antigravity-rtl
 ```
 
 > [!WARNING]
-> **App Updates:** Since official updates to Antigravity or Antigravity IDE overwrite application files, you will need to re-run `npx rz-antigravity-rtl` after an app update to re-apply the patch.
+> **App Updates:** Since official updates to Antigravity, Antigravity IDE, or the VS Code extension overwrite application files, you will need to re-run `npx rz-antigravity-rtl` after an update to re-apply the patch.
 
 ---
 
@@ -97,7 +104,7 @@ For detailed technical explanations, architecture diagrams, and developer guides
 
 - [**Architecture Overview**](./docs/architecture.md) — How the patcher works, ASAR extraction/repacking, and injection anchors.
 - [**Antigravity IDE Integration**](./docs/ide-integration.md) — CSP bypassing, workbench injection, and Monaco editor isolation.
-- [**Antigravity Desktop Integration**](./docs/desktop-integration.md) — Desktop Electron architecture, `dist/utils.js`, and IPC bridge.
+- [**Antigravity App Integration**](./docs/desktop-integration.md) — Desktop Electron architecture, `dist/utils.js`, and IPC bridge.
 - [**UI System & Micro-Animations**](./docs/ui-system.md) — Color palette, spring physics, 4-corner snap mathematics, and debounce timers.
 - [**Typography & Offline Fonts**](./docs/typography-fonts.md) — Base64 vs local font loading, unicode range subsetting, and auto-direction regex.
 
@@ -111,22 +118,23 @@ This project is an advanced fork and evolution of the original [**antigravity-rt
 
 <div dir="rtl">
 
-# ابزار هوشمند RZ Antigravity RTL — پشتیبانی راست‌به‌چپ برای Antigravity Desktop و Antigravity IDE
+# ابزار هوشمند RZ Antigravity RTL — پشتیبانی راست‌به‌چپ برای Antigravity App، Antigravity IDE و اکستنشن VS Code
 
-> **پشتیبانی کامل از Antigravity RTL و Antigravity IDE RTL**: موتور هوشمند راست‌به‌چپ و شخصی‌سازی تایپوگرافی برای هر دو نسخه دسکتاپ و محیط توسعه (IDE).
+> **پشتیبانی کامل از Antigravity App، Antigravity IDE و اکستنشن رسمی VS Code**: موتور هوشمند راست‌به‌چپ و شخصی‌سازی تایپوگرافی برای تمامی محیط‌های آنتی‌گرویتی.
 
-یک پچِ هوشمند، بسیار سریع و زیبا برای پشتیبانی کامل از زبان‌های راست‌به‌چپ (RTL) در هر دو برنامهٔ **Antigravity Desktop** و **Antigravity IDE**.
+یک پچِ هوشمند، بسیار سریع و زیبا برای پشتیبانی کامل از زبان‌های راست‌به‌چپ (RTL) در برنامه‌های **Antigravity App**، **Antigravity IDE** و همچنین **اکستنشن رسمی Google Antigravity در VS Code (و نسخه Insiders)**.
 
 این ابزار خط فرمان (CLI) به صورت خودکار موتور پیشرفتهٔ RTL را به هستهٔ برنامه و محیط چت آنتی‌گرویتی تزریق می‌کند تا از زبان‌های فارسی، عربی و عبری به بهترین شکل پشتیبانی شود و یک پنل شناور با نام **RZ Antigravity RTL** برای تغییر زندهٔ فونت‌ها، اندازهٔ خطوط و قلم در اختیار شما قرار می‌دهد.
 
 ## ✨ امکانات برجسته
 
-- **پشتیبانی دوگانه**: قابل اعمال هم‌زمان روی هر دو برنامهٔ **Antigravity Desktop** و **Antigravity IDE**.
-- **ایزوله بودن کامل ادیتور کد در IDE**: محیط کدنویسی اصلی (Monaco Editor)، درخت فایل‌ها، تب‌ها، منوها و بلوک‌های کد (`pre` و `code`) کاملاً دست‌نخورده و چپ‌چین می‌مانند و فقط پنل چت و اینپوت‌ها راست‌چین می‌شوند.
+- **پشتیبانی سه‌گانه (Triple Support)**: قابل اعمال روی نسخه دسکتاپ، محیط مستقل Antigravity IDE و اکستنشن رسمی Google Antigravity در نرم‌افزار VS Code.
+- **ایزوله بودن کامل ادیتور کد در IDE و VS Code**: محیط کدنویسی اصلی (Monaco Editor)، درخت فایل‌ها، تب‌ها، منوها، ترمینال و بلوک‌های کد (`pre` و `code`) کاملاً دست‌نخورده و چپ‌چین می‌مانند و تنظیمات تنها در سراسر محیط چت (پیام‌ها، فیلد ورودی پرامپت، دکمه‌ها و کارت‌های ابزار) اعمال می‌شود.
+- **پوشش کامل تایپوگرافی چت**: فونت‌های فارسی، انگلیسی و کدنویسی روی تمام اجزای محیط گفتگو (متن پیام‌ها، ویرایشگر پرامپت، کارت‌های اجرای ابزار و نشان‌های وضعیت ساب‌ایجنت‌ها) به صورت یکپارچه اعمال می‌شوند.
 - **ترکیب رنگی نئون لایم و مشکی عمیق**: تم مدرن مشکی خالص (`#000000`) با لهجه‌های جذاب سبز-فسفری/لایم نئون (`#D0FE1B`) برای کنتراست فوق‌العاده و زیبایی چشم‌نواز.
 - **رابط کاربری نرم و دراپ‌داون‌های فنری انیمیشنی**: باز شدن دراپ‌داون‌ها با فیزیک اسپرینگ (فنری) نرم و مدرن به جای سلکتورهای ساده و خشک پیش‌فرض سیستم‌عامل.
 - **میکرو-انیمیشن‌ها و برگشت خودکار**: تغییر اسلایدرها همراه با پالس و میکروانیمیشن مقادیر عددی است که پس از توقف دست به صورت خودکار به حالت عادی بازمی‌گردد.
-- **درگ و اسنپ هوشمند به ۴ گوشه (کاملاً ایزوله در باکس چت)**: در Antigravity IDE، دکمه تنها در محدودهٔ داخلی باکس چت حرکت می‌کند و به هیچ وجه وارد محیط ادیتور کد یا سایر بخش‌های IDE نمی‌شود و به ۴ گوشهٔ داخلی باکس اسنپ می‌شود.
+- **درگ و اسنپ هوشمند به ۴ گوشه (کاملاً ایزوله در باکس چت)**: در Antigravity IDE و VS Code، دکمه تنها در محدودهٔ داخلی باکس چت حرکت می‌کند و به هیچ وجه وارد محیط ادیتور کد یا سایر بخش‌ها نمی‌شود و به ۴ گوشهٔ داخلی باکس اسنپ می‌شود.
 - **دراپ‌داون اختصاصی انتخاب ۲۲ فونت‌ آفلاین**:
   - **فارسی**: پیش‌فرض (Vazirmatn)، ایران سنس ایکس (IRANSans X)، ایران یکان ایکس (IRANYekanX Pro)، کلمه (Kalameh)، نورا (Noora)، پلاک (Pelak)، راوی (Ravi)، یکان بخ (Yekan Bakh)
   - **انگلیسی**: پیش‌فرض (System)، اوپن سنس (Open Sans)، روبوتو (Roboto)، فیرا سنس (Fira Sans)
@@ -147,15 +155,19 @@ npx rz-antigravity-rtl
 ```
 
 ابزار به صورت خودکار برنامه‌های نصب‌شده روی سیستم شما را شناسایی کرده و منوی زیر را نمایش می‌دهد:
-1. **Both Antigravity Desktop & Antigravity IDE (Recommended)**
-2. **Antigravity Desktop App only**
+1. **All Applications (Desktop, IDE & VS Code Extension) [Recommended]**
+2. **Antigravity App App only**
 3. **Antigravity IDE only**
+4. **VS Code Antigravity Extension only**
 
 ### گزینه‌های خط فرمان
 
 ```bash
-# پچ کردن هم‌زمان دسکتاپ و IDE
+# پچ کردن هم‌زمان همه برنامه‌ها (دسکتاپ، IDE و اکستنشن VS Code)
 npx rz-antigravity-rtl --all
+
+# پچ کردن فقط اکستنشن رسمی VS Code
+npx rz-antigravity-rtl --vscode
 
 # پچ کردن فقط محیط Antigravity IDE
 npx rz-antigravity-rtl --ide
@@ -165,6 +177,7 @@ npx rz-antigravity-rtl --app
 
 # بازگردانی به نسخه اصلی (حذف پچ)
 npx rz-antigravity-rtl --restore
+npx rz-antigravity-rtl --vscode --restore
 npx rz-antigravity-rtl --ide --restore
 npx rz-antigravity-rtl --app --restore
 ```
