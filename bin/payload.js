@@ -10,7 +10,14 @@ win.webContents.on('console-message', (event, ...args) => {
         try {
             const data = message.substring(16);
             const configPath = require('path').join(require('os').homedir(), '.antigravity-rtl.json');
-            require('fs').writeFileSync(configPath, data);
+            let merged = JSON.parse(data);
+            if (require('fs').existsSync(configPath)) {
+                try {
+                    const existing = JSON.parse(require('fs').readFileSync(configPath, 'utf8'));
+                    merged = { ...existing, ...merged };
+                } catch (_) {}
+            }
+            require('fs').writeFileSync(configPath, JSON.stringify(merged, null, 2));
         } catch (e) {}
     }
 });
@@ -64,20 +71,34 @@ win.webContents.on('dom-ready', () => {
         }
 
         // Read config
-        let rtlConfig = { faFont: '', enFont: '', codeFont: '', lh: '1.7', fs: '15', isRTL: true, forceRTL: false, fixAtSign: true };
+        let rtlConfig = { faFont: '', enFont: '', codeFont: '', lh: '1.7', fs: '15', isRTL: true, forceRTL: false };
         try {
             const configPath = require('path').join(require('os').homedir(), '.antigravity-rtl.json');
             if (require('fs').existsSync(configPath)) {
                 const cfg = JSON.parse(require('fs').readFileSync(configPath, 'utf8'));
-                rtlConfig = { 
-                    ...rtlConfig, 
-                    ...cfg,
-                    faFont: normalizeFont(cfg.faFont),
-                    enFont: normalizeFont(cfg.enFont),
-                    codeFont: normalizeFont(cfg.codeFont)
-                };
+                for (const k of ['faFont', 'enFont', 'codeFont', 'lh', 'fs']) {
+                    if (typeof cfg[k] === 'string' && /^[\p{L}\p{N} ._-]{0,64}$/u.test(cfg[k])) {
+                        rtlConfig[k] = cfg[k];
+                    }
+                }
+                if (typeof cfg.isRTL === 'boolean') rtlConfig.isRTL = cfg.isRTL;
+                if (typeof cfg.forceRTL === 'boolean') rtlConfig.forceRTL = cfg.forceRTL;
+                rtlConfig.faFont = normalizeFont(rtlConfig.faFont);
+                rtlConfig.enFont = normalizeFont(rtlConfig.enFont);
+                rtlConfig.codeFont = normalizeFont(rtlConfig.codeFont);
             }
         } catch (e) {}
+
+        let rtlVersion = '__RZ_PACKAGE_VERSION__';
+        if (rtlVersion.startsWith('__RZ_')) {
+            try {
+                const localPkgPath = require('path').join(__dirname, '..', 'package.json');
+                if (require('fs').existsSync(localPkgPath)) {
+                    const parsedPkg = JSON.parse(require('fs').readFileSync(localPkgPath, 'utf8'));
+                    if (parsedPkg && parsedPkg.version) rtlVersion = parsedPkg.version;
+                }
+            } catch (e) {}
+        }
 
         // Unified injection for RTL Toggle, CSS, and JS
         win.webContents.executeJavaScript(`
@@ -111,6 +132,7 @@ win.webContents.on('dom-ready', () => {
                 function init() {
                     const fontBase64 = '${fontBase64}';
                     const fontsB64 = ${JSON.stringify(fontsB64)};
+                    const rtlVersion = '${rtlVersion}';
             let rtlConfig = ${JSON.stringify(rtlConfig)};
             
             function normalizeFont(val) {
@@ -134,20 +156,27 @@ win.webContents.on('dom-ready', () => {
             
             let isRTL = rtlConfig.isRTL;
             let forceRTL = rtlConfig.forceRTL || false;
-            let fixAtSign = rtlConfig.fixAtSign !== false;
             // Permanent widget styles (#D0FE1B Volt on #000000 Pitch Black)
             if (!document.getElementById('rtl-widget-style')) {
                 let widgetStyle = document.createElement('style');
                 widgetStyle.id = 'rtl-widget-style';
                 widgetStyle.textContent = \`
                     /* Topbar Button Styling */
+                    #rtl-topbar-wrapper,
                     .rtl-topbar-wrapper {
                         display: inline-flex !important;
                         align-items: center !important;
                         position: relative !important;
                         app-region: no-drag !important;
                         -webkit-app-region: no-drag !important;
-                        margin: 0 4px !important;
+                        margin-left: 0px !important;
+                        margin-right: 0px !important;
+                    }
+
+                    [data-testid="pane-titlebar-toolbar"]:has(#rtl-topbar-wrapper) {
+                        opacity: 1 !important;
+                        visibility: visible !important;
+                        pointer-events: auto !important;
                     }
 
                     /* Topbar Button Base (Matching Open IDE / Install IDE button) */
@@ -718,13 +747,13 @@ win.webContents.on('dom-ready', () => {
                 }
 
                 let enFontRule = '';
-                let enFontStr = 'ui-sans-serif, system-ui, sans-serif';
+                let enFontStr = '"Google Sans Flex", "Google Sans", "Inter", ui-sans-serif, system-ui, sans-serif';
                 if (enFont) {
                     if (fontsB64[enFont]) {
                         enFontStr = "'SelectedEnFont', ui-sans-serif, system-ui, sans-serif";
                         enFontRule = \`
                             @font-face {
-                                family: 'SelectedEnFont';
+                                font-family: 'SelectedEnFont';
                                 src: url('data:font/ttf;base64,\${fontsB64[enFont]}') format('truetype');
                                 font-weight: 100 900;
                             }
@@ -747,7 +776,7 @@ win.webContents.on('dom-ready', () => {
                 }
 
                 let codeFontRule = '';
-                let codeFontStr = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+                let codeFontStr = '"Google Sans Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
                 if (codeFont && fontsB64[codeFont + '-Regular']) {
                     codeFontStr = "'SelectedCodeFont', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
                     codeFontRule = \`
@@ -779,6 +808,8 @@ win.webContents.on('dom-ready', () => {
                     }
                 \` : '';
                 
+                const fullTextFontStack = \`\${faFontName}, \${enFontStr}, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"\`;
+
                 rtlStyle.textContent = \`
                     \${faFontRule}
                     \${enFontRule}
@@ -789,13 +820,25 @@ win.webContents.on('dom-ready', () => {
                         font-weight: 100 900;
                         unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
                     }
-                    :root, :host, html, body {
-                        font-family: \${faFontName}, \${enFontStr}, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji" !important;
+                    :root, :host, html, body, #root, body[data-agy-font], .font-sans {
+                        --font-sans: \${fullTextFontStack} !important;
+                        --default-font-family: \${fullTextFontStack} !important;
+                        --font-mono: \${codeFontStr} !important;
+                        --default-mono-font-family: \${codeFontStr} !important;
+                        --editor-font-family: \${codeFontStr} !important;
+                        font-family: \${fullTextFontStack} !important;
                     }
                     .prose, [data-testid="chat-message"], .markdown-body, .leading-relaxed, [contenteditable="true"], [contenteditable="true"] p {
                         font-size: \${fs}px !important;
                     }
-                    p, h1, h2, h3, h4, h5, h6, ul, ol {
+                    :not([contenteditable="true"]):not([contenteditable="true"] *) > p,
+                    :not([contenteditable="true"]) h1,
+                    :not([contenteditable="true"]) h2,
+                    :not([contenteditable="true"]) h3,
+                    :not([contenteditable="true"]) h4,
+                    :not([contenteditable="true"]) h5,
+                    :not([contenteditable="true"]) h6,
+                    ul, ol {
                         unicode-bidi: plaintext;
                         text-align: start;
                     }
@@ -834,11 +877,9 @@ win.webContents.on('dom-ready', () => {
                         padding-right: 2.5rem !important;
                     }
                     
-                    /* Thinking Blocks (Keep LTR) */
+                    /* Thinking Blocks */
                     .cursor-edit.text-secondary-foreground,
                     .cursor-edit.text-secondary-foreground * {
-                        direction: ltr !important;
-                        text-align: left !important;
                         unicode-bidi: isolate !important;
                     }
                     
@@ -855,9 +896,60 @@ win.webContents.on('dom-ready', () => {
                         line-height: \${lh} !important;
                     }
                     
-                    [contenteditable="true"], [contenteditable="true"] * {
-                        unicode-bidi: isolate !important;
+                    /* Input Area Base */
+                    [contenteditable="true"],
+                    [contenteditable="true"] p,
+                    [contenteditable="true"] div,
+                    [contenteditable="true"] span,
+                    textarea {
+                        unicode-bidi: normal !important;
                         text-align: start !important;
+                    }
+
+                    [contenteditable="true"][dir="rtl"],
+                    [contenteditable="true"][dir="rtl"] p,
+                    [contenteditable="true"][dir="rtl"] div,
+                    textarea[dir="rtl"] {
+                        direction: rtl !important;
+                        text-align: right !important;
+                    }
+
+                    [contenteditable="true"][dir="ltr"],
+                    [contenteditable="true"][dir="ltr"] p,
+                    [contenteditable="true"][dir="ltr"] div,
+                    textarea[dir="ltr"] {
+                        direction: ltr !important;
+                        text-align: left !important;
+                    }
+
+                    /* File/Folder Mentions in Input (preserves LTR character order without altering native layout) */
+                    [contenteditable="true"] .context-scope-mention,
+                    [contenteditable="true"] .inline-pill,
+                    [contenteditable="true"] .inline-pill-wrap,
+                    [contenteditable="true"] [data-lexical-beautiful-mention],
+                    [contenteditable="true"] [data-beautiful-mention],
+                    [contenteditable="true"] [data-quotable-inline="true"],
+                    [contenteditable="true"] [data-lexical-decorator="true"],
+                    [contenteditable="true"] .mention,
+                    .typeahead-popover,
+                    .mentions-menu,
+                    [data-mention-menu] {
+                        direction: ltr !important;
+                        unicode-bidi: isolate !important;
+                        text-align: left !important;
+                    }
+
+                    [contenteditable="true"] .context-scope-mention *,
+                    [contenteditable="true"] .inline-pill *,
+                    [contenteditable="true"] .inline-pill-wrap *,
+                    [contenteditable="true"] [data-lexical-beautiful-mention] *,
+                    [contenteditable="true"] [data-beautiful-mention] *,
+                    [contenteditable="true"] [data-quotable-inline="true"] *,
+                    [contenteditable="true"] [data-lexical-decorator="true"] *,
+                    [contenteditable="true"] .mention * {
+                        direction: ltr !important;
+                        text-align: left !important;
+                        unicode-bidi: normal !important;
                     }
                     
                     [role="navigation"][aria-label="Sidebar"] *, .truncate {
@@ -875,48 +967,229 @@ win.webContents.on('dom-ready', () => {
                 updateDynamicCSS(rtlConfig.faFont, rtlConfig.enFont, rtlConfig.codeFont, rtlConfig.lh, rtlConfig.fs);
             }
             
-            // 2. Input Observer Logic
+            // 2. Smart Direction Detection (Content-Majority & Technical Token Exclusion)
+            const KNOWN_TECH_KEYWORDS = new Set([
+                'react', 'vue', 'angular', 'svelte', 'next', 'nuxt', 'astro', 'vite', 'webpack',
+                'tailwind', 'bootstrap', 'node', 'deno', 'bun', 'express', 'nest', 'fastapi',
+                'django', 'flask', 'laravel', 'spring', 'prisma', 'drizzle', 'typeorm', 'postgres',
+                'mysql', 'mongo', 'redis', 'supabase', 'firebase', 'graphql', 'rest', 'axios',
+                'fetch', 'json', 'yaml', 'xml', 'html', 'css', 'scss', 'js', 'ts', 'jsx', 'tsx',
+                'python', 'rust', 'golang', 'java', 'c', 'cpp', 'csharp', 'php', 'ruby', 'swift',
+                'kotlin', 'dart', 'flutter', 'electron', 'tauri', 'docker', 'kubernetes', 'k8s',
+                'git', 'github', 'gitlab', 'linux', 'ubuntu', 'debian', 'windows', 'wsl', 'macos',
+                'vscode', 'antigravity', 'gemini', 'openai', 'chatgpt', 'claude', 'copilot', 'cursor',
+                'deepseek', 'grok', 'llama', 'mistral', 'qwen', 'huggingface', 'npm', 'pnpm', 'yarn',
+                'pip', 'cargo', 'playwright', 'vitest', 'jest', 'eslint', 'prettier', 'turbopack',
+                'esbuild', 'rollup', 'api', 'cli', 'sdk', 'ui', 'ux', 'pr', 'ide', 'url', 'version',
+                'deploy', 'merge', 'push', 'commit', 'pull', 'build', 'test', 'run', 'fix', 'debug',
+                'lint', 'format', 'release', 'publish', 'install', 'update', 'upgrade', 'delete',
+                'remove', 'add', 'create', 'start', 'stop', 'restart', 'reload', 'connect', 'disconnect',
+                'login', 'logout', 'auth', 'config', 'setup', 'init', 'clone', 'checkout', 'branch',
+                'status', 'diff', 'log', 'reset', 'revert', 'stash', 'rebase'
+            ]);
+
+            const PERSIAN_MARKERS = /(?:\\s|^)(?:شد|شده|کن|کنید|کرد|کردم|کردی|کردند|بود|بوده|است|هست|نیست|رو|به|در|با|برای|از|که|های|چه|چیست|چطوری|کجاست|چرا|باشه|ممنون|لطفا|داره|میده|نداره|نمیده|زد|زدم|بزن|بده|داد|دادم)(?:\\s|[.,!?،؛؟]|$)/;
+
+            function detectSmartDirection(rawText) {
+                if (!rawText) return null;
+                const text = rawText.replace(/[\\u200B-\\u200F\\uFEFF]/g, '').trim();
+                if (!text) return null;
+
+                // Fast-path: if there are no RTL characters at all, it is guaranteed LTR.
+                // Skips all regex stripping, token parsing and character counting in 0.001ms.
+                if (!/[\\u0591-\\u07FF\\uFB1D-\\uFDFD\\uFE70-\\uFEFC]/.test(text)) {
+                    return 'ltr';
+                }
+
+                let stripped = text
+                    .replace(/\`\`\`[\\s\\S]*?\`\`\`/g, ' ')
+                    .replace(/\`[^\`\\r\\n]*\`/g, ' ')
+                    .replace(/<\\/?[A-Za-z][^<>\\r\\n]*>/g, ' ')
+                    .replace(/\\$\\$[\\s\\S]*?\\$\\$/g, ' ')
+                    .replace(/\\$[^$\\r\\n]+\\$/g, ' ')
+                    .replace(/\\b(?:https?|ftp):\\/\\/[^\\s<>{}"']+/gi, ' ')
+                    .replace(/\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b/gi, ' ')
+                    .replace(/(?<![\\p{L}\\p{N}_])(?:[A-Za-z]:[\\\\/]|\.{0,2}\\/|~\\/)[^\\s<>()\\x5B\\x5D{}"'“”‘’«»]+/gu, ' ')
+                    .replace(/\\b(?:[A-Za-z0-9_.-]+[\\\\/])+[A-Za-z0-9_.-]+\\b/g, ' ')
+                    .replace(/@[a-zA-Z0-9_.-]+/g, ' ')
+                    .replace(/\\b(?:npm|pnpm|yarn|npx|git|pip|python|node|cargo|go|docker|kubectl|bun|deno|curl|wget)\\s+[A-Za-z0-9_.:=@/+-]+/gi, ' ')
+                    .replace(/\\b[A-Za-z0-9]+(?:[-_.][A-Za-z0-9]+)+\\b/g, ' ')
+                    .replace(/\\b[a-z]+\\[[^\\]\\r\\n]+\\]/gi, ' ')
+                    .replace(/\\b[A-Za-z][A-Za-z0-9]*[0-9_.][A-Za-z0-9_.]*\\b/g, ' ')
+                    .replace(/\\b[A-Za-z]*[a-z][A-Z][A-Za-z0-9]*\\b/g, ' ')
+                    .replace(/\\b[A-Z]{2,5}\\b/g, ' ');
+
+                stripped = stripped.replace(/\\b[A-Za-z][A-Za-z0-9_-]*\\b/g, (match) => {
+                    return KNOWN_TECH_KEYWORDS.has(match.toLowerCase()) ? ' ' : match;
+                });
+
+                const rtlMatches = stripped.match(/[\\u0591-\\u07FF\\uFB1D-\\uFDFD\\uFE70-\\uFEFC]/g);
+                const ltrMatches = stripped.match(/[A-Za-z]/g);
+
+                const rtlCount = rtlMatches ? rtlMatches.length : 0;
+                const ltrCount = ltrMatches ? ltrMatches.length : 0;
+                const totalCount = rtlCount + ltrCount;
+
+                if (totalCount === 0) {
+                    const rawFirst = text.match(/[A-Za-z\\u0591-\\u07FF\\uFB1D-\\uFDFD\\uFE70-\\uFEFC]/);
+                    if (rawFirst) {
+                        return /[\\u0591-\\u07FF\\uFB1D-\\uFDFD\\uFE70-\\uFEFC]/.test(rawFirst[0]) ? 'rtl' : 'ltr';
+                    }
+                    return 'auto';
+                }
+
+                if (rtlCount > 0 && rtlCount >= ltrCount) {
+                    return 'rtl';
+                }
+
+                if (rtlCount > 0) {
+                    if (PERSIAN_MARKERS.test(stripped) || /[\\u0591-\\u07FF\\uFB1D-\\uFDFD\\uFE70-\\uFEFC][.,!?،؛؟\\s]*$/.test(stripped.trim())) {
+                        const rtlRatio = rtlCount / totalCount;
+                        if (rtlRatio >= 0.15) {
+                            return 'rtl';
+                        }
+                    }
+                }
+
+                if (ltrCount > 0 && ltrCount > rtlCount) {
+                    return 'ltr';
+                }
+
+                return rtlCount > 0 ? 'rtl' : 'ltr';
+            }
+
+            // Helper: Extract text for direction calculation, isolating code snippets, pre, kbd and mention pills
+            function getTextForDirection(el) {
+                if (!el) return '';
+                if (typeof el === 'string') return el;
+                if (el.tagName === 'TEXTAREA') return el.value || '';
+                if (el.tagName === 'PRE' || el.tagName === 'CODE') return el.textContent || '';
+                if (!el.cloneNode) return el.textContent || '';
+                try {
+                    const clone = el.cloneNode(true);
+                    const codeNodes = clone.querySelectorAll('pre, code, kbd, samp, var, svg, script, style, .context-scope-mention, [data-bidilens-code]');
+                    for (let i = 0; i < codeNodes.length; i++) {
+                        codeNodes[i].remove();
+                    }
+                    const strippedText = (clone.textContent || '').trim();
+                    return strippedText.length > 0 ? strippedText : (el.textContent || '');
+                } catch (e) {
+                    return el.textContent || '';
+                }
+            }
+
+            // 3. Input & Chat Output Observer Logic
             function updateDir() {
                 if (!isRTL) return;
                 
                 // Inputs
-                document.querySelectorAll('[contenteditable="true"] p, [contenteditable="true"], textarea[data-testid="ask-question-writein"]').forEach(el => {
-                    const raw = el.tagName === 'TEXTAREA' ? el.value : el.textContent;
+                const inputSelectors = [
+                    '#root [contenteditable="true"] p',
+                    '#root [contenteditable="true"] div',
+                    '#root [contenteditable="true"]',
+                    '#root textarea',
+                    '[contenteditable="true"] p',
+                    '[contenteditable="true"] div',
+                    '[contenteditable="true"]',
+                    'textarea',
+                    'textarea[data-testid="ask-question-writein"]'
+                ];
+
+                document.querySelectorAll(inputSelectors.join(',\\n')).forEach(el => {
+                    if (el.closest('.monaco-editor, pre, code')) return;
+                    const raw = getTextForDirection(el);
                     const text = (raw || '').replace(/[\\u200B-\\u200F\\uFEFF]/g, '').trim();
-                    if (text.length > 0) {
-                        const isRtlText = /^[^a-zA-Z]*[\\u0591-\\u07FF\\uFB1D-\\uFDFD\\uFE70-\\uFEFC]/.test(text);
-                        const newDir = isRtlText ? 'rtl' : 'ltr';
+                    if (forceRTL) {
+                        if (el.getAttribute('dir') !== 'rtl') el.setAttribute('dir', 'rtl');
+                        if (el.matches('[contenteditable="true"]')) {
+                            el.querySelectorAll('p, div[data-lexical-text]').forEach(child => {
+                                if (child.getAttribute('dir') !== 'rtl') child.setAttribute('dir', 'rtl');
+                            });
+                        }
+                    } else if (text.length > 0) {
+                        const detected = detectSmartDirection(text);
+                        const newDir = detected === 'rtl' ? 'rtl' : 'ltr';
                         if (el.getAttribute('dir') !== newDir) el.setAttribute('dir', newDir);
+                        if (el.matches('[contenteditable="true"]')) {
+                            el.querySelectorAll('p, div[data-lexical-text]').forEach(child => {
+                                if (child.getAttribute('dir') !== newDir) child.setAttribute('dir', newDir);
+                            });
+                        }
                     } else {
                         if (el.hasAttribute('dir')) el.removeAttribute('dir');
+                        if (el.matches('[contenteditable="true"]')) {
+                            el.querySelectorAll('p, div[data-lexical-text]').forEach(child => {
+                                if (child.hasAttribute('dir')) child.removeAttribute('dir');
+                            });
+                        }
+                    }
+                    if (el.querySelectorAll) {
+                        el.querySelectorAll('.context-scope-mention, .inline-pill, [data-lexical-beautiful-mention], [data-beautiful-mention], [data-quotable-inline="true"]').forEach(pill => {
+                            if (pill.getAttribute('dir') !== 'ltr') pill.setAttribute('dir', 'ltr');
+                        });
                     }
                 });
                 
                 // Chat Output
-                document.querySelectorAll(\`
-                    .prose > *, 
-                    [data-testid="chat-message"] > *, 
-                    .markdown-body > *, 
-                    .leading-relaxed > *,
-                    [data-testid="user-input-step"],
-                    [data-testid="user-input-step"] > *,
-                    div:has(> [role="radiogroup"]),
-                    label[for^="ask-opt-"]
-                \`).forEach(el => {
+                const outputSelectors = [
+                    '.prose > *',
+                    '[data-testid="chat-message"] > *',
+                    '.markdown-body > *',
+                    '.leading-relaxed > *',
+                    '.leading-relaxed',
+                    '[data-testid="user-input-step"]',
+                    '[data-testid="user-input-step"] > *',
+                    'div:has(> [role="radiogroup"])',
+                    'label[for^="ask-opt-"]',
+                    '[data-testid="ask-question-option"]',
+                    '#root [data-testid="user-message-content"]',
+                    '#root [data-testid="user-message-content"] p',
+                    '#root [data-testid="user-message-content"] span',
+                    '#root [data-testid="user-message-bubble"]',
+                    '#root [data-testid="user-input-step"]',
+                    '#root [data-testid="user-input-step"] *',
+                    '#root .agy-user-bubble',
+                    '#root [data-turn-content] p',
+                    '#root [data-turn-content] li',
+                    '#root [data-turn-content] blockquote',
+                    '#root [data-turn-content] h1, #root [data-turn-content] h2, #root [data-turn-content] h3',
+                    '#root [data-turn-content] div.line-content',
+                    '#root [data-testid="thinking-step"]',
+                    '#root [data-testid="thinking-step"] *',
+                    '#root [data-testid="tool-use-step"]',
+                    '#root [data-testid="tool-call-summary"]',
+                    '#root [data-testid="artifact-card"]',
+                    '#root [data-testid="artifact-header"]',
+                    '#root [data-testid="artifact-title"]',
+                    '#root p',
+                    '#root li',
+                    '#root h1, #root h2, #root h3, #root h4, #root h5, #root h6',
+                    '#root blockquote',
+                    '#root table th',
+                    '#root table td',
+                    '[data-testid="user-message-content"]',
+                    '[data-testid="user-message-bubble"]',
+                    '[data-testid="user-input-step"]',
+                    '[data-testid="thinking-step"]',
+                    '[data-testid="tool-use-step"]',
+                    '[data-testid="tool-call-summary"]',
+                    '[data-testid="artifact-title"]'
+                ];
+
+                document.querySelectorAll(outputSelectors.join(',\\n')).forEach(el => {
                     if (el.tagName === 'PRE' || el.tagName === 'CODE') return;
-                    if (el.closest('pre, code, .cursor-edit.text-secondary-foreground')) return;
+                    if (el.closest('pre, code, [class*="font-mono"], .rtl-widget-panel-portal')) return;
+                    if (el.closest('.monaco-editor, .terminal, .xterm')) return;
                     
-                    const text = (el.textContent || '').replace(/[\\u200B-\\u200F\\uFEFF]/g, '').trim();
+                    const raw = getTextForDirection(el);
+                    const text = (raw || '').replace(/[\\u200B-\\u200F\\uFEFF]/g, '').trim();
                     let dir = 'auto';
                     
                     if (forceRTL) {
                         dir = 'rtl';
                     } else if (text) {
-                        const firstChar = text.match(/[A-Za-z\\u0600-\\u06FF\\u0750-\\u077F\\u08A0-\\u08FF\\uFB50-\\uFDFF\\uFE70-\\uFEFF]/);
-                        if (firstChar) {
-                            const isPersianOrArabic = /[\\u0600-\\u06FF\\u0750-\\u077F\\u08A0-\\u08FF\\uFB50-\\uFDFF\\uFE70-\\uFEFF]/.test(firstChar[0]);
-                            dir = isPersianOrArabic ? 'rtl' : 'ltr';
-                        }
+                        const detected = detectSmartDirection(text);
+                        if (detected) dir = detected;
                     }
                     
                     if (el.getAttribute('dir') !== dir) {
@@ -928,7 +1201,7 @@ win.webContents.on('dom-ready', () => {
             
             // Keyboard Shortcuts
             document.addEventListener('keydown', (e) => {
-                if (e.altKey && e.code === 'KeyR') {
+                if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyR') {
                     e.preventDefault();
                     setRTLActive(!isRTL);
                 }
@@ -949,7 +1222,7 @@ win.webContents.on('dom-ready', () => {
             // 3. Create Native Topbar Button Trigger (Twin of Install IDE button from base code)
             const widgetWrapper = document.createElement('div');
             widgetWrapper.id = 'rtl-topbar-wrapper';
-            widgetWrapper.className = 'relative inline-flex items-center';
+            widgetWrapper.className = 'rtl-topbar-wrapper relative inline-flex items-center';
             widgetWrapper.style.appRegion = 'no-drag';
             widgetWrapper.innerHTML = \`
                 <!-- Topbar Button (Matching Open IDE / Install IDE button) -->
@@ -1086,7 +1359,7 @@ win.webContents.on('dom-ready', () => {
                         <svg height="14" width="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"></path></svg>
                         Star on GitHub
                       </a>
-                      <span class="rtl-version-badge">v1.1.7</span>
+                      <span class="rtl-version-badge">v\${rtlVersion}</span>
                     </div>
             \`;
 
@@ -1105,45 +1378,63 @@ win.webContents.on('dom-ready', () => {
                 try {
                     const cs = window.getComputedStyle(refBtn);
                     const h = parseFloat(cs.height);
-                    if (h > 15) {
+                    if (h > 15 && btn.style.height !== cs.height) {
                         btn.style.setProperty('height', cs.height, 'important');
                     }
                     if (refBtn.getAttribute('data-testid') !== 'titlebar-more-actions') {
                         const pl = parseFloat(cs.paddingLeft);
                         const pr = parseFloat(cs.paddingRight);
-                        if (pl > 0) btn.style.setProperty('padding-left', cs.paddingLeft, 'important');
-                        if (pr > 0) btn.style.setProperty('padding-right', cs.paddingRight, 'important');
+                        if (pl > 0 && btn.style.paddingLeft !== cs.paddingLeft) btn.style.setProperty('padding-left', cs.paddingLeft, 'important');
+                        if (pr > 0 && btn.style.paddingRight !== cs.paddingRight) btn.style.setProperty('padding-right', cs.paddingRight, 'important');
+                        if (cs.fontSize && btn.style.fontSize !== cs.fontSize) btn.style.setProperty('font-size', cs.fontSize, 'important');
+                        if (cs.borderRadius && btn.style.borderRadius !== cs.borderRadius) btn.style.setProperty('border-radius', cs.borderRadius, 'important');
                     }
-                    if (cs.fontSize) btn.style.setProperty('font-size', cs.fontSize, 'important');
-                    if (cs.fontFamily) btn.style.setProperty('font-family', cs.fontFamily, 'important');
-                    if (cs.fontWeight) btn.style.setProperty('font-weight', cs.fontWeight, 'important');
-                    if (cs.lineHeight) btn.style.setProperty('line-height', cs.lineHeight, 'important');
-                    if (cs.borderRadius) btn.style.setProperty('border-radius', cs.borderRadius, 'important');
+                    if (cs.fontFamily && btn.style.fontFamily !== cs.fontFamily) btn.style.setProperty('font-family', cs.fontFamily, 'important');
+                    if (cs.fontWeight && btn.style.fontWeight !== cs.fontWeight) btn.style.setProperty('font-weight', cs.fontWeight, 'important');
+                    if (cs.lineHeight && btn.style.lineHeight !== cs.lineHeight) btn.style.setProperty('line-height', cs.lineHeight, 'important');
                 } catch(e) {}
             }
 
+            function getDirectChild(parent, descendant) {
+                if (!parent || !descendant) return null;
+                let curr = descendant;
+                while (curr && curr.parentElement && curr.parentElement !== parent) {
+                    curr = curr.parentElement;
+                }
+                return (curr && curr.parentElement === parent) ? curr : null;
+            }
+
             function attachElements() {
-                const openIdeBtn = document.querySelector('[data-testid="open-ide"]')
-                    || document.querySelector('[data-testid="open-editor"]')
-                    || document.querySelector('[data-testid="open-editor-single"]')
-                    || document.querySelector('[data-testid="open-editor-multi"]')
-                    || document.querySelector('[data-testid="open-editor-empty"]')
-                    || document.querySelector('[data-testid="install-editor"]');
-                const moreActionsBtn = document.querySelector('[data-testid="titlebar-more-actions"]');
-                const actionsCluster = openIdeBtn?.parentElement
+                const paneToolbar = document.querySelector('[data-testid="pane-titlebar-toolbar"]');
+                const scope = paneToolbar || document;
+                const openIdeBtn = scope.querySelector('[data-testid="open-ide"]')
+                    || scope.querySelector('[data-testid="open-editor"]')
+                    || scope.querySelector('[data-testid="open-editor-single"]')
+                    || scope.querySelector('[data-testid="open-editor-multi"]')
+                    || scope.querySelector('[data-testid="open-editor-empty"]')
+                    || scope.querySelector('[data-testid="install-editor"]')
+                    || document.querySelector('[data-testid="open-ide"], [data-testid="open-editor"], [data-testid="open-editor-single"], [data-testid="open-editor-multi"], [data-testid="open-editor-empty"], [data-testid="install-editor"]');
+                const moreActionsBtn = scope.querySelector('[data-testid="titlebar-more-actions"]')
+                    || document.querySelector('[data-testid="titlebar-more-actions"]');
+                const actionsCluster = paneToolbar?.querySelector('.flex.items-center.gap-1')
+                    || paneToolbar?.querySelector('.flex.items-center')
+                    || paneToolbar?.firstElementChild
                     || moreActionsBtn?.parentElement
-                    || document.querySelector('[data-testid="pane-titlebar-toolbar"]')?.firstElementChild;
+                    || openIdeBtn?.parentElement;
 
                 if (actionsCluster) {
-                    if (openIdeBtn && openIdeBtn.parentElement === actionsCluster) {
-                        // Priority 1: Place directly between 3-dots and Open IDE (immediately before Open IDE)
-                        if (widgetWrapper.nextElementSibling !== openIdeBtn) {
-                            actionsCluster.insertBefore(widgetWrapper, openIdeBtn);
+                    const openIdeItem = getDirectChild(actionsCluster, openIdeBtn);
+                    const moreActionsItem = getDirectChild(actionsCluster, moreActionsBtn);
+
+                    if (openIdeItem) {
+                        // Priority 1: Place directly between 3-dots and Open IDE (immediately before Open IDE wrapper)
+                        if (widgetWrapper.nextElementSibling !== openIdeItem || widgetWrapper.parentElement !== actionsCluster) {
+                            actionsCluster.insertBefore(widgetWrapper, openIdeItem);
                         }
-                    } else if (moreActionsBtn && moreActionsBtn.parentElement === actionsCluster) {
+                    } else if (moreActionsItem) {
                         // Priority 2: In pages without Open IDE (e.g. Home screen), place immediately next to 3-dots
-                        if (moreActionsBtn.nextElementSibling !== widgetWrapper) {
-                            actionsCluster.insertBefore(widgetWrapper, moreActionsBtn.nextSibling);
+                        if (moreActionsItem.nextElementSibling !== widgetWrapper || widgetWrapper.parentElement !== actionsCluster) {
+                            actionsCluster.insertBefore(widgetWrapper, moreActionsItem.nextSibling);
                         }
                     } else if (!widgetWrapper.isConnected || widgetWrapper.parentElement !== actionsCluster) {
                         actionsCluster.appendChild(widgetWrapper);
@@ -1157,15 +1448,36 @@ win.webContents.on('dom-ready', () => {
 
             attachElements();
 
-            document.body.addEventListener('input', updateDir, { capture: true });
-            document.body.addEventListener('focusin', updateDir, { capture: true });
-            const observer = new MutationObserver(() => {
-                attachElements();
-                updateDir();
+            let updateDirTimer = null;
+            function scheduleUpdateDir() {
+                if (!isRTL) return;
+                if (updateDirTimer) return;
+                updateDirTimer = setTimeout(() => {
+                    updateDirTimer = null;
+                    updateDir();
+                }, 300);
+            }
+
+            document.body.addEventListener('input', scheduleUpdateDir, { capture: true });
+            document.body.addEventListener('focusin', scheduleUpdateDir, { capture: true });
+            document.body.addEventListener('keyup', scheduleUpdateDir, { capture: true });
+            const observer = new MutationObserver((mutations) => {
+                const hasExternal = mutations.some(m =>
+                    [...m.addedNodes, ...m.removedNodes].some(node =>
+                        !node.id || (!node.id.startsWith('rtl-') && !node.id.startsWith('antigravity-rtl'))
+                    )
+                );
+                if (hasExternal || !document.getElementById('rtl-topbar-wrapper') || !document.getElementById('rtl-widget-panel-portal')) {
+                    attachElements();
+                }
+                if (hasExternal) scheduleUpdateDir();
             });
-            observer.observe(document.body, { childList: true, subtree: true });
-            setInterval(updateDir, 500);
-            setInterval(attachElements, 1000);
+            observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+            setTimeout(attachElements, 100);
+            setTimeout(attachElements, 400);
+            setTimeout(attachElements, 1000);
+            setTimeout(attachElements, 2000);
+            setTimeout(attachElements, 4000);
 
             const topbarBtn = widgetWrapper.querySelector('#rtl-topbar-btn');
             const toggleBtn = panel.querySelector('#rtl-toggle-btn');

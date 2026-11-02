@@ -1,5 +1,9 @@
 /* RZ ANTIGRAVITY RTL - IDE PAYLOAD */
 (function() {
+    const rtlVersion = (typeof window !== 'undefined' && window.__RZ_RTL_VERSION__)
+        ? window.__RZ_RTL_VERSION__
+        : '__RZ_PACKAGE_VERSION__';
+
     // 1. Configuration Management
     let rtlConfig = {
         faFont: '',
@@ -8,8 +12,7 @@
         lh: '1.7',
         fs: '15',
         isRTL: true,
-        forceRTL: false,
-        fixAtSign: true
+        forceRTL: false
     };
 
     function normalizeFont(val) {
@@ -17,10 +20,36 @@
         return val;
     }
 
+    function sanitizeConfig(cfg) {
+        if (!cfg || typeof cfg !== 'object') return {};
+        const safe = {};
+        for (const k of ['faFont', 'enFont', 'codeFont', 'lh', 'fs']) {
+            if (typeof cfg[k] === 'string' && /^[\p{L}\p{N} ._-]{0,64}$/u.test(cfg[k])) {
+                safe[k] = cfg[k];
+            }
+        }
+        if (typeof cfg.isRTL === 'boolean') safe.isRTL = cfg.isRTL;
+        if (typeof cfg.forceRTL === 'boolean') safe.forceRTL = cfg.forceRTL;
+        return safe;
+    }
+
+    // A. Pre-injected config from proxy server (baked into script response)
+    if (typeof window !== 'undefined' && window.__RZ_INITIAL_CONFIG__ && typeof window.__RZ_INITIAL_CONFIG__ === 'object') {
+        const pre = sanitizeConfig(window.__RZ_INITIAL_CONFIG__);
+        rtlConfig = {
+            ...rtlConfig,
+            ...pre,
+            faFont: normalizeFont(pre.faFont),
+            enFont: normalizeFont(pre.enFont),
+            codeFont: normalizeFont(pre.codeFont)
+        };
+    }
+
+    // B. LocalStorage fallback
     try {
         const saved = localStorage.getItem('rz-antigravity-rtl-config') || localStorage.getItem('smart-rtl-config');
         if (saved) {
-            const parsed = JSON.parse(saved);
+            const parsed = sanitizeConfig(JSON.parse(saved));
             rtlConfig = {
                 ...rtlConfig,
                 ...parsed,
@@ -34,22 +63,54 @@
     let isRTL = rtlConfig.isRTL;
     let forceRTL = rtlConfig.forceRTL || false;
 
+    function isWorkbenchWindow() {
+        try {
+            if (typeof window === 'undefined') return false;
+            const p = (window.location && window.location.pathname) || '';
+            const href = (window.location && window.location.href) || '';
+            if (p.endsWith('workbench.html') || href.includes('workbench.html')) return true;
+            if (document.querySelector('link[href*="workbench.desktop.main.css"], script[src*="workbench.js"], .monaco-workbench')) return true;
+        } catch (e) {}
+        return false;
+    }
+
     // 2. Permanent Widget & Base CSS (#D0FE1B on #000000 Theme)
     if (!document.getElementById('rtl-widget-style')) {
         const widgetStyle = document.createElement('style');
         widgetStyle.id = 'rtl-widget-style';
         widgetStyle.textContent = `
-            /* Topbar Button Styling in IDE Header */
+            /* Topbar Button Styling in IDE & Web Header */
             #rtl-topbar-wrapper,
             .rtl-topbar-wrapper {
                 display: inline-flex !important;
                 align-items: center !important;
                 justify-content: center !important;
                 position: relative !important;
-                margin: 0 2px !important;
+                margin-left: 1px !important;
+                margin-right: 3px !important;
                 padding: 0 !important;
                 flex-shrink: 0 !important;
                 line-height: 1 !important;
+                app-region: no-drag !important;
+                -webkit-app-region: no-drag !important;
+            }
+
+            [data-testid="pane-titlebar-toolbar"]:has(#rtl-topbar-wrapper) {
+                opacity: 1 !important;
+                visibility: visible !important;
+                pointer-events: auto !important;
+            }
+
+            .rtl-topbar-wrapper.rtl-topbar-floating {
+                position: fixed !important;
+                top: 10px !important;
+                right: 14px !important;
+                z-index: 999999 !important;
+                background-color: #09090b !important;
+                border-radius: 8px !important;
+                box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7), 0 0 10px rgba(208, 254, 27, 0.2) !important;
+                border: 1px solid rgba(208, 254, 27, 0.3) !important;
+                padding: 2px 4px !important;
             }
 
             /* Topbar Button Base (Twin of Desktop button adapted for IDE Header) */
@@ -602,26 +663,38 @@
     const rtlStyle = document.createElement('style');
     rtlStyle.id = 'rz-antigravity-rtl-style';
 
+    const altOrigin = (typeof location !== 'undefined' && location.hostname === '127.0.0.1' && location.port)
+        ? `${location.protocol}//localhost:${location.port}`
+        : (typeof location !== 'undefined' && location.hostname === 'localhost' && location.port)
+            ? `${location.protocol}//127.0.0.1:${location.port}`
+            : '';
+
     const updateDynamicCSS = (faFont, enFont, codeFont, lh, fs) => {
         const faFontStr = faFont ? `'${faFont}', 'PersianOnlyFont'` : "'PersianOnlyFont'";
+        const fontSrc = (relPath, fmt = 'woff2') =>
+            (altOrigin ? `url('${altOrigin}/${relPath}') format('${fmt}'),\n                     ` : '') +
+            `url('/${relPath}') format('${fmt}'),\n                     url('./${relPath}') format('${fmt}')`;
+
+        const isChatWebview = !isWorkbenchWindow();
 
         // English / General Font:
-        // When enFont is empty (Default), preserve the IDE's real native font: var(--font-sans)
-        // (which resolves to Inter or Google Sans Flex)
-        // When enFont is specified (OpenSans, Roboto, FiraSans), place it right after Persian font.
-        const defaultSansStack = 'var(--font-sans, var(--vscode-font-family, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif))';
+        // IMPORTANT: Do NOT reference var(--font-sans) inside defaultSansStack because defaultSansStack
+        // is assigned to --font-sans on :root/body, which would create a W3C CSS variable cycle (guaranteed-invalid).
+        // In Webview/Browser, main.js sets --vscode-font-family inline to system-ui, so use Google Sans Flex directly.
+        const defaultSansStack = isChatWebview
+            ? '"Google Sans Flex", "Google Sans", "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+            : 'var(--vscode-font-family, "Google Sans Flex", "Google Sans", "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif)';
         const textFontFamily = `${faFontStr}, ${enFont ? `'${enFont}', ` : ''}${defaultSansStack}`;
 
         // Code Font:
-        // When codeFont is empty (Default), preserve the IDE's real native editor font:
-        // var(--editor-font-family, var(--font-mono, 'Google Sans Code', monospace))
-        // When codeFont is specified (FiraCode, JetBrainsMono), place it first!
-        const defaultCodeStack = 'var(--editor-font-family, var(--font-mono, "Google Sans Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace))';
+        // IMPORTANT: Do NOT reference var(--font-mono) or var(--editor-font-family) inside defaultCodeStack
+        // to prevent CSS custom property cyclic invalidation.
+        const defaultCodeStack = isChatWebview
+            ? '"Google Sans Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
+            : '"Google Sans Code", var(--vscode-editor-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace)';
         const codeFontStack = codeFont
             ? `'${codeFont}', ${defaultCodeStack}`
             : defaultCodeStack;
-
-        const isChatWebview = !document.querySelector('.monaco-workbench');
 
         const forceRtlRule = (isRTL && forceRTL) ? `
             [data-testid="conversation-view"] p:not(pre *):not(code *):not([class*="font-mono"] *),
@@ -644,40 +717,61 @@
             .antigravity-agent-side-panel [data-testid="user-input-step"] > *:not(pre):not(code),
             .part.auxiliarybar [data-testid="conversation-view"] p:not(pre *):not(code *),
             .interactive-session .value > *:not(pre):not(code),
-            .monaco-chat-response > *:not(pre):not(code)${isChatWebview ? `,
-            #root [data-testid="conversation-view"] p:not(pre *):not(code *),
-            #root [data-testid="conversation-view"] li:not(pre *):not(code *),
-            #root .prose p:not(pre *):not(code *),
-            #root .prose li:not(pre *):not(code *),
-            #root [data-testid="chat-message"] p:not(pre *):not(code *),
-            #root [data-testid="chat-message"] li:not(pre *):not(code *),
-            #root [data-testid="user-input-step"] div:not(pre *):not(code *)` : ''} {
+            .monaco-chat-response > *:not(pre):not(code),
+            /* Web chat universal force RTL */
+            #root p:not(pre *):not(code *):not([class*="font-mono"] *),
+            #root li:not(pre *):not(code *):not([class*="font-mono"] *),
+            #root h1, #root h2, #root h3, #root h4, #root h5, #root h6,
+            #root blockquote:not(pre *):not(code *),
+            #root [data-testid="user-message-content"],
+            #root [data-testid="user-message-bubble"],
+            #root [data-testid="user-input-step"],
+            #root [data-testid="user-input-step"] > *:not(pre):not(code),
+            #root [data-turn-content] p:not(pre *):not(code *),
+            #root [data-turn-content] li:not(pre *):not(code *),
+            #root [data-turn-content] div:not(pre *):not(code *):not([class*="font-mono"] *),
+            #root .line-content:not(pre *):not(code *):not([class*="font-mono"] *),
+            [data-testid="user-message-content"],
+            [data-testid="user-message-bubble"],
+            [data-testid="user-input-step"] {
                 direction: rtl !important;
                 text-align: right !important;
                 unicode-bidi: isolate !important;
+            }
+            .line-content:not(pre *):not(code *):not([class*="font-mono"] *) {
+                justify-content: flex-start !important;
             }
         ` : '';
 
         rtlStyle.textContent = `
             ${isChatWebview ? `
-            /* Webview Iframe: Apply Typography & Variables to entire chat environment */
-            :root, :host, html, body, #root, body[data-agy-font] {
+            /* Webview Iframe & Browser: Apply Typography & Variables to entire chat environment */
+            :root, :host, html, body, #root, body[data-agy-font], body[data-agy-font="google-sans"], body[data-agy-font="inter"], .font-sans {
+                --vscode-font-family: ${textFontFamily} !important;
                 --font-sans: ${textFontFamily} !important;
                 --default-font-family: ${textFontFamily} !important;
+                --vscode-editor-font-family: ${codeFontStack} !important;
                 --font-mono: ${codeFontStack} !important;
                 --default-mono-font-family: ${codeFontStack} !important;
                 --editor-font-family: ${codeFontStack} !important;
                 font-family: ${textFontFamily} !important;
             }
 
+            ${(enFont || faFont) ? `
+            body[data-agy-font="google-sans"], body[data-agy-font="google-sans"] :where(.font-sans) {
+                font-variation-settings: normal !important;
+            }
+            ` : ''}
+
             #root,
-            #root button,
+            #root button:not(#rtl-topbar-btn),
             #root input,
             #root textarea,
             #root select,
             #root p,
-            #root span:not(pre *):not(code *):not([class*="font-mono"]):not([class*="code"]):not(kbd):not(samp),
-            #root div:not(pre *):not(code *):not([class*="font-mono"]):not([class*="code"]):not(kbd):not(samp),
+            #root h1, #root h2, #root h3, #root h4, #root h5, #root h6,
+            #root span:not(#rtl-topbar-wrapper *):not(pre *):not(code *):not(.font-mono):not(.font-mono *):not(.code-block):not(.code-block *):not([data-testid*="code"] *):not(kbd):not(samp),
+            #root div:not(#rtl-topbar-wrapper):not(#rtl-topbar-wrapper *):not(pre *):not(code *):not(.font-mono):not(.font-mono *):not(.code-block):not(.code-block *):not([data-testid*="code"] *):not(kbd):not(samp),
             #root label,
             #root a,
             #root li,
@@ -704,120 +798,106 @@
             /* Bundled Persian Fonts */
             @font-face {
                 font-family: 'PersianOnlyFont';
-                src: url('/Vazirmatn-Variable.woff2') format('woff2'),
-                     url('./Vazirmatn-Variable.woff2') format('woff2'),
+                src: ${fontSrc('Vazirmatn-Variable.woff2', 'woff2')},
+                     url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/fonts/webfonts/Vazirmatn-Variable.woff2') format('woff2'),
                      local('Vazirmatn'), local('Vazirmatn-Variable');
                 font-weight: 100 900;
                 unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
             }
             @font-face {
                 font-family: 'IRANSansX';
-                src: url('/fonts/persian/IRANSansX-Regular.woff2') format('woff2'),
-                     url('./fonts/persian/IRANSansX-Regular.woff2') format('woff2'),
+                src: ${fontSrc('fonts/persian/IRANSansX-Regular.woff2', 'woff2')},
                      local('IRANSansX'), local('IRANSansX-Regular');
                 font-weight: 400;
                 unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
             }
             @font-face {
                 font-family: 'IRANSansX';
-                src: url('/fonts/persian/IRANSansX-Bold.woff2') format('woff2'),
-                     url('./fonts/persian/IRANSansX-Bold.woff2') format('woff2'),
+                src: ${fontSrc('fonts/persian/IRANSansX-Bold.woff2', 'woff2')},
                      local('IRANSansX-Bold');
                 font-weight: 700;
                 unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
             }
             @font-face {
                 font-family: 'IRANYekanX';
-                src: url('/fonts/persian/IRANYekanX-Regular.woff2') format('woff2'),
-                     url('./fonts/persian/IRANYekanX-Regular.woff2') format('woff2'),
+                src: ${fontSrc('fonts/persian/IRANYekanX-Regular.woff2', 'woff2')},
                      local('IRANYekanX'), local('IRANYekanX-Regular');
                 font-weight: 400;
                 unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
             }
             @font-face {
                 font-family: 'IRANYekanX';
-                src: url('/fonts/persian/IRANYekanX-Bold.woff2') format('woff2'),
-                     url('./fonts/persian/IRANYekanX-Bold.woff2') format('woff2'),
+                src: ${fontSrc('fonts/persian/IRANYekanX-Bold.woff2', 'woff2')},
                      local('IRANYekanX-Bold');
                 font-weight: 700;
                 unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
             }
             @font-face {
                 font-family: 'Kalameh';
-                src: url('/fonts/persian/Kalameh-Regular.woff2') format('woff2'),
-                     url('./fonts/persian/Kalameh-Regular.woff2') format('woff2'),
+                src: ${fontSrc('fonts/persian/Kalameh-Regular.woff2', 'woff2')},
                      local('Kalameh'), local('Kalameh-Regular');
                 font-weight: 400;
                 unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
             }
             @font-face {
                 font-family: 'Kalameh';
-                src: url('/fonts/persian/Kalameh-Bold.woff2') format('woff2'),
-                     url('./fonts/persian/Kalameh-Bold.woff2') format('woff2'),
+                src: ${fontSrc('fonts/persian/Kalameh-Bold.woff2', 'woff2')},
                      local('Kalameh-Bold');
                 font-weight: 700;
                 unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
             }
             @font-face {
                 font-family: 'Noora';
-                src: url('/fonts/persian/Noora-Regular.woff2') format('woff2'),
-                     url('./fonts/persian/Noora-Regular.woff2') format('woff2'),
+                src: ${fontSrc('fonts/persian/Noora-Regular.woff2', 'woff2')},
                      local('Noora'), local('Noora-Regular');
                 font-weight: 400;
                 unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
             }
             @font-face {
                 font-family: 'Noora';
-                src: url('/fonts/persian/Noora-Bold.woff2') format('woff2'),
-                     url('./fonts/persian/Noora-Bold.woff2') format('woff2'),
+                src: ${fontSrc('fonts/persian/Noora-Bold.woff2', 'woff2')},
                      local('Noora-Bold');
                 font-weight: 700;
                 unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
             }
             @font-face {
                 font-family: 'Pelak';
-                src: url('/fonts/persian/Pelak-Regular.woff2') format('woff2'),
-                     url('./fonts/persian/Pelak-Regular.woff2') format('woff2'),
+                src: ${fontSrc('fonts/persian/Pelak-Regular.woff2', 'woff2')},
                      local('Pelak'), local('Pelak-Regular');
                 font-weight: 400;
                 unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
             }
             @font-face {
                 font-family: 'Pelak';
-                src: url('/fonts/persian/Pelak-Bold.woff2') format('woff2'),
-                     url('./fonts/persian/Pelak-Bold.woff2') format('woff2'),
+                src: ${fontSrc('fonts/persian/Pelak-Bold.woff2', 'woff2')},
                      local('Pelak-Bold');
                 font-weight: 700;
                 unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
             }
             @font-face {
                 font-family: 'Ravi';
-                src: url('/fonts/persian/Ravi-Regular.woff2') format('woff2'),
-                     url('./fonts/persian/Ravi-Regular.woff2') format('woff2'),
+                src: ${fontSrc('fonts/persian/Ravi-Regular.woff2', 'woff2')},
                      local('Ravi'), local('Ravi-Regular');
                 font-weight: 400;
                 unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
             }
             @font-face {
                 font-family: 'Ravi';
-                src: url('/fonts/persian/Ravi-Bold.woff2') format('woff2'),
-                     url('./fonts/persian/Ravi-Bold.woff2') format('woff2'),
+                src: ${fontSrc('fonts/persian/Ravi-Bold.woff2', 'woff2')},
                      local('Ravi-Bold');
                 font-weight: 700;
                 unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
             }
             @font-face {
                 font-family: 'YekanBakh';
-                src: url('/fonts/persian/YekanBakh-Regular.woff2') format('woff2'),
-                     url('./fonts/persian/YekanBakh-Regular.woff2') format('woff2'),
+                src: ${fontSrc('fonts/persian/YekanBakh-Regular.woff2', 'woff2')},
                      local('YekanBakh'), local('YekanBakh-Regular');
                 font-weight: 400;
                 unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
             }
             @font-face {
                 font-family: 'YekanBakh';
-                src: url('/fonts/persian/YekanBakh-Bold.woff2') format('woff2'),
-                     url('./fonts/persian/YekanBakh-Bold.woff2') format('woff2'),
+                src: ${fontSrc('fonts/persian/YekanBakh-Bold.woff2', 'woff2')},
                      local('YekanBakh-Bold');
                 font-weight: 700;
                 unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
@@ -826,29 +906,27 @@
             /* Bundled English Fonts */
             @font-face {
                 font-family: 'OpenSans';
-                src: url('/fonts/english/OpenSans.ttf') format('truetype'),
-                     url('./fonts/english/OpenSans.ttf') format('truetype'),
+                src: ${fontSrc('fonts/english/OpenSans.ttf', 'truetype')},
                      local('Open Sans'), local('OpenSans');
                 font-weight: 100 900;
             }
+            ${enFont === 'Roboto' ? `
             @font-face {
                 font-family: 'Roboto';
-                src: url('/fonts/english/Roboto.ttf') format('truetype'),
-                     url('./fonts/english/Roboto.ttf') format('truetype'),
+                src: ${fontSrc('fonts/english/Roboto.ttf', 'truetype')},
                      local('Roboto');
                 font-weight: 100 900;
             }
+            ` : ''}
             @font-face {
                 font-family: 'FiraSans';
-                src: url('/fonts/english/FiraSans-Regular.ttf') format('truetype'),
-                     url('./fonts/english/FiraSans-Regular.ttf') format('truetype'),
+                src: ${fontSrc('fonts/english/FiraSans-Regular.ttf', 'truetype')},
                      local('Fira Sans'), local('FiraSans');
                 font-weight: 400;
             }
             @font-face {
                 font-family: 'FiraSans';
-                src: url('/fonts/english/FiraSans-Bold.ttf') format('truetype'),
-                     url('./fonts/english/FiraSans-Bold.ttf') format('truetype'),
+                src: ${fontSrc('fonts/english/FiraSans-Bold.ttf', 'truetype')},
                      local('Fira Sans Bold'), local('FiraSans-Bold');
                 font-weight: 700;
             }
@@ -856,29 +934,25 @@
             /* Bundled Code Fonts */
             @font-face {
                 font-family: 'FiraCode';
-                src: url('/fonts/code/FiraCode-Regular.woff2') format('woff2'),
-                     url('./fonts/code/FiraCode-Regular.woff2') format('woff2'),
+                src: ${fontSrc('fonts/code/FiraCode-Regular.woff2', 'woff2')},
                      local('Fira Code'), local('FiraCode');
                 font-weight: 400;
             }
             @font-face {
                 font-family: 'FiraCode';
-                src: url('/fonts/code/FiraCode-Bold.woff2') format('woff2'),
-                     url('./fonts/code/FiraCode-Bold.woff2') format('woff2'),
+                src: ${fontSrc('fonts/code/FiraCode-Bold.woff2', 'woff2')},
                      local('Fira Code Bold'), local('FiraCode-Bold');
                 font-weight: 700;
             }
             @font-face {
                 font-family: 'JetBrainsMono';
-                src: url('/fonts/code/JetBrainsMono-Regular.woff2') format('woff2'),
-                     url('./fonts/code/JetBrainsMono-Regular.woff2') format('woff2'),
+                src: ${fontSrc('fonts/code/JetBrainsMono-Regular.woff2', 'woff2')},
                      local('JetBrains Mono'), local('JetBrainsMono');
                 font-weight: 400;
             }
             @font-face {
                 font-family: 'JetBrainsMono';
-                src: url('/fonts/code/JetBrainsMono-Bold.woff2') format('woff2'),
-                     url('./fonts/code/JetBrainsMono-Bold.woff2') format('woff2'),
+                src: ${fontSrc('fonts/code/JetBrainsMono-Bold.woff2', 'woff2')},
                      local('JetBrains Mono Bold'), local('JetBrainsMono-Bold');
                 font-weight: 700;
             }
@@ -899,30 +973,68 @@
             }
 
             /* Buttons, inputs, text elements in chat */
-            [data-testid="conversation-view"] button,
+            [data-testid="conversation-view"] button:not(#rtl-topbar-btn),
             [data-testid="conversation-view"] input,
             [data-testid="conversation-view"] textarea,
             [data-testid="conversation-view"] select,
             [data-testid="conversation-view"] p,
-            [data-testid="conversation-view"] span:not(pre *):not(code *):not([class*="font-mono"]):not([class*="code"]):not(kbd):not(samp),
-            [data-testid="conversation-view"] div:not(pre *):not(code *):not([class*="font-mono"]):not([class*="code"]):not(kbd):not(samp),
+            [data-testid="conversation-view"] span:not(#rtl-topbar-wrapper *):not(pre *):not(code *):not(.font-mono):not(.font-mono *):not(.code-block):not(.code-block *):not([data-testid*="code"] *):not(kbd):not(samp),
+            [data-testid="conversation-view"] div:not(#rtl-topbar-wrapper):not(#rtl-topbar-wrapper *):not(pre *):not(code *):not(.font-mono):not(.font-mono *):not(.code-block):not(.code-block *):not([data-testid*="code"] *):not(kbd):not(samp),
             [data-testid="conversation-view"] label,
             [data-testid="conversation-view"] a,
             [data-testid="conversation-view"] li,
             [data-testid="conversation-view"] [data-placeholder],
             [data-testid="conversation-view"] ::placeholder,
-            .antigravity-agent-side-panel button,
+            .antigravity-agent-side-panel button:not(#rtl-topbar-btn),
             .antigravity-agent-side-panel input,
             .antigravity-agent-side-panel textarea,
             .antigravity-agent-side-panel select,
             .antigravity-agent-side-panel p,
-            .antigravity-agent-side-panel span:not(pre *):not(code *):not([class*="font-mono"]):not([class*="code"]):not(kbd):not(samp),
-            .antigravity-agent-side-panel div:not(pre *):not(code *):not([class*="font-mono"]):not([class*="code"]):not(kbd):not(samp),
+            .antigravity-agent-side-panel span:not(#rtl-topbar-wrapper *):not(pre *):not(code *):not(.font-mono):not(.font-mono *):not(.code-block):not(.code-block *):not([data-testid*="code"] *):not(kbd):not(samp),
+            .antigravity-agent-side-panel div:not(#rtl-topbar-wrapper):not(#rtl-topbar-wrapper *):not(pre *):not(code *):not(.font-mono):not(.font-mono *):not(.code-block):not(.code-block *):not([data-testid*="code"] *):not(kbd):not(samp),
             .antigravity-agent-side-panel label,
             .antigravity-agent-side-panel a,
             .antigravity-agent-side-panel li,
             .antigravity-agent-side-panel ::placeholder {
                 font-family: ${textFontFamily} !important;
+            }
+
+            /* Universal Base RTL and LTR rules */
+            [dir="rtl"] {
+                direction: rtl !important;
+                text-align: right !important;
+                unicode-bidi: isolate !important;
+            }
+
+            [dir="ltr"] {
+                direction: ltr !important;
+                text-align: left !important;
+                unicode-bidi: isolate !important;
+            }
+
+            /* User Message Bubble Alignment and Direction */
+            [data-testid="user-message-bubble"][dir="rtl"],
+            [data-testid="user-message-content"][dir="rtl"],
+            .agy-user-bubble[dir="rtl"],
+            [dir="rtl"] [data-testid="user-message-content"],
+            [dir="rtl"] .agy-user-bubble {
+                direction: rtl !important;
+                text-align: right !important;
+            }
+
+            /* Assistant line content and flex layouts */
+            .line-content[dir="rtl"],
+            [dir="rtl"] .line-content {
+                direction: rtl !important;
+                text-align: right !important;
+                justify-content: flex-start !important;
+            }
+
+            /* Turn content */
+            [data-turn-content] [dir="rtl"],
+            [dir="rtl"] [data-turn-content] {
+                direction: rtl !important;
+                text-align: right !important;
             }
 
             /* Chat Paragraphs and Font Sizing */
@@ -945,11 +1057,22 @@
             [data-testid="conversation-view"] [contenteditable="true"] p,
             .part.auxiliarybar [contenteditable="true"] p,
             .interactive-session .value,
-            .monaco-chat-response${isChatWebview ? `,
-            #root [data-testid="conversation-view"] p,
-            #root [data-testid="conversation-view"] li,
-            #root .prose p,
-            #root .prose li` : ''} {
+            .monaco-chat-response,
+            #root p:not(pre *):not(code *):not([class*="font-mono"] *),
+            #root li:not(pre *):not(code *):not([class*="font-mono"] *),
+            #root [data-testid="user-message-content"],
+            #root [data-testid="user-message-content"] p,
+            #root [data-testid="user-input-step"],
+            #root [data-testid="user-input-step"] p,
+            #root [data-testid="user-input-step"] div,
+            #root [contenteditable="true"],
+            #root [contenteditable="true"] p,
+            #root [data-turn-content] p,
+            #root [data-turn-content] li,
+            #root [data-turn-content] div:not(pre *):not(code *):not([class*="font-mono"] *),
+            #root .line-content:not(pre *):not(code *):not([class*="font-mono"] *),
+            [data-testid="user-message-content"],
+            [data-testid="user-input-step"] {
                 font-size: ${fs}px !important;
             }
 
@@ -1052,11 +1175,33 @@
             [class*="code-block"],
             [class*="codeBlock"],
             [data-testid*="code"],
+            code[class*="language-"],
+            pre[class*="language-"],
             pre *,
             code *,
             .font-mono *,
             [class*="font-mono"] *,
-            [class*="code-block"] * {
+            [class*="code-block"] *,
+            [class*="codeBlock"] *,
+            [data-testid*="code"] *,
+            code[class*="language-"] *,
+            pre[class*="language-"] *,
+            #root pre,
+            #root code,
+            #root kbd,
+            #root samp,
+            #root .font-mono,
+            #root [class*="font-mono"],
+            #root [class*="code-block"],
+            #root [class*="codeBlock"],
+            #root [data-testid*="code"],
+            #root pre *,
+            #root code *,
+            #root .font-mono *,
+            #root [class*="font-mono"] *,
+            #root [class*="code-block"] *,
+            #root [class*="codeBlock"] *,
+            #root [data-testid*="code"] * {
                 unicode-bidi: isolate !important;
                 direction: ltr !important;
                 text-align: left !important;
@@ -1091,23 +1236,86 @@
             [data-testid="conversation-view"] label[for^="ask-opt-"],
             .part.auxiliarybar .prose p,
             .part.auxiliarybar [contenteditable="true"],
-            .interactive-session .value p${isChatWebview ? `,
-            #root [data-testid="conversation-view"] p,
-            #root [data-testid="conversation-view"] li,
-            #root .prose p,
-            #root .prose li` : ''} {
+            .interactive-session .value p,
+            #root p:not(pre *):not(code *):not([class*="font-mono"] *),
+            #root li:not(pre *):not(code *):not([class*="font-mono"] *),
+            #root [data-testid="user-message-content"],
+            #root [data-testid="user-message-content"] p,
+            #root [data-testid="user-input-step"],
+            #root [data-testid="user-input-step"] p,
+            #root [data-testid="user-input-step"] div,
+            #root [contenteditable="true"],
+            #root [contenteditable="true"] p,
+            #root [data-turn-content] p,
+            #root [data-turn-content] li,
+            #root [data-turn-content] div:not(pre *):not(code *):not([class*="font-mono"] *),
+            #root .line-content:not(pre *):not(code *):not([class*="font-mono"] *),
+            [data-testid="user-message-content"],
+            [data-testid="user-input-step"] {
                 line-height: ${lh} !important;
             }
 
-            /* Input Area */
+            /* Input Area Base */
             .antigravity-agent-side-panel [contenteditable="true"], 
-            .antigravity-agent-side-panel [contenteditable="true"] *,
+            .antigravity-agent-side-panel [contenteditable="true"] p,
             [data-testid="conversation-view"] [contenteditable="true"], 
-            [data-testid="conversation-view"] [contenteditable="true"] *,
+            [data-testid="conversation-view"] [contenteditable="true"] p,
             .part.auxiliarybar [contenteditable="true"], 
-            .part.auxiliarybar [contenteditable="true"] * {
-                unicode-bidi: isolate !important;
+            .part.auxiliarybar [contenteditable="true"] p,
+            #root [contenteditable="true"],
+            #root [contenteditable="true"] p,
+            [contenteditable="true"],
+            [contenteditable="true"] p,
+            [contenteditable="true"] div,
+            textarea {
+                unicode-bidi: normal !important;
                 text-align: start !important;
+            }
+
+            [contenteditable="true"][dir="rtl"],
+            [contenteditable="true"][dir="rtl"] p,
+            [contenteditable="true"][dir="rtl"] div,
+            textarea[dir="rtl"] {
+                direction: rtl !important;
+                text-align: right !important;
+            }
+
+            [contenteditable="true"][dir="ltr"],
+            [contenteditable="true"][dir="ltr"] p,
+            [contenteditable="true"][dir="ltr"] div,
+            textarea[dir="ltr"] {
+                direction: ltr !important;
+                text-align: left !important;
+            }
+
+            /* File/Folder Mentions in Input (preserves LTR character order without altering native layout) */
+            [contenteditable="true"] .context-scope-mention,
+            [contenteditable="true"] .inline-pill,
+            [contenteditable="true"] .inline-pill-wrap,
+            [contenteditable="true"] [data-lexical-beautiful-mention],
+            [contenteditable="true"] [data-beautiful-mention],
+            [contenteditable="true"] [data-quotable-inline="true"],
+            [contenteditable="true"] [data-lexical-decorator="true"],
+            [contenteditable="true"] .mention,
+            .typeahead-popover,
+            .mentions-menu,
+            [data-mention-menu] {
+                direction: ltr !important;
+                unicode-bidi: isolate !important;
+                text-align: left !important;
+            }
+
+            [contenteditable="true"] .context-scope-mention *,
+            [contenteditable="true"] .inline-pill *,
+            [contenteditable="true"] .inline-pill-wrap *,
+            [contenteditable="true"] [data-lexical-beautiful-mention] *,
+            [contenteditable="true"] [data-beautiful-mention] *,
+            [contenteditable="true"] [data-quotable-inline="true"] *,
+            [contenteditable="true"] [data-lexical-decorator="true"] *,
+            [contenteditable="true"] .mention * {
+                direction: ltr !important;
+                text-align: left !important;
+                unicode-bidi: normal !important;
             }
 
             /* Strict Protection for Monaco Editor and Outer Workbench */
@@ -1135,42 +1343,182 @@
         updateDynamicCSS(rtlConfig.faFont, rtlConfig.enFont, rtlConfig.codeFont, rtlConfig.lh, rtlConfig.fs);
     }
 
+    // 3. Smart Direction Detection (Content-Majority & Technical Token Exclusion)
+    const KNOWN_TECH_KEYWORDS = new Set([
+        'react', 'vue', 'angular', 'svelte', 'next', 'nuxt', 'astro', 'vite', 'webpack',
+        'tailwind', 'bootstrap', 'node', 'deno', 'bun', 'express', 'nest', 'fastapi',
+        'django', 'flask', 'laravel', 'spring', 'prisma', 'drizzle', 'typeorm', 'postgres',
+        'mysql', 'mongo', 'redis', 'supabase', 'firebase', 'graphql', 'rest', 'axios',
+        'fetch', 'json', 'yaml', 'xml', 'html', 'css', 'scss', 'js', 'ts', 'jsx', 'tsx',
+        'python', 'rust', 'golang', 'java', 'c', 'cpp', 'csharp', 'php', 'ruby', 'swift',
+        'kotlin', 'dart', 'flutter', 'electron', 'tauri', 'docker', 'kubernetes', 'k8s',
+        'git', 'github', 'gitlab', 'linux', 'ubuntu', 'debian', 'windows', 'wsl', 'macos',
+        'vscode', 'antigravity', 'gemini', 'openai', 'chatgpt', 'claude', 'copilot', 'cursor',
+        'deepseek', 'grok', 'llama', 'mistral', 'qwen', 'huggingface', 'npm', 'pnpm', 'yarn',
+        'pip', 'cargo', 'playwright', 'vitest', 'jest', 'eslint', 'prettier', 'turbopack',
+        'esbuild', 'rollup', 'api', 'cli', 'sdk', 'ui', 'ux', 'pr', 'ide', 'url', 'version',
+        'deploy', 'merge', 'push', 'commit', 'pull', 'build', 'test', 'run', 'fix', 'debug',
+        'lint', 'format', 'release', 'publish', 'install', 'update', 'upgrade', 'delete',
+        'remove', 'add', 'create', 'start', 'stop', 'restart', 'reload', 'connect', 'disconnect',
+        'login', 'logout', 'auth', 'config', 'setup', 'init', 'clone', 'checkout', 'branch',
+        'status', 'diff', 'log', 'reset', 'revert', 'stash', 'rebase'
+    ]);
+
+    const PERSIAN_MARKERS = /(?:\s|^)(?:شد|شده|کن|کنید|کرد|کردم|کردی|کردند|بود|بوده|است|هست|نیست|رو|به|در|با|برای|از|که|های|چه|چیست|چطوری|کجاست|چرا|باشه|ممنون|لطفا|داره|میده|نداره|نمیده|زد|زدم|بزن|بده|داد|دادم)(?:\s|[.,!?،؛؟]|$)/;
+
+    function detectSmartDirection(rawText) {
+        if (!rawText) return null;
+        const text = rawText.replace(/[\u200B-\u200F\uFEFF]/g, '').trim();
+        if (!text) return null;
+
+        // Fast-path: if there are no RTL characters at all, it is guaranteed LTR.
+        // Skips all regex stripping, token parsing and character counting in 0.001ms.
+        if (!/[\u0591-\u07FF\uFB1D-\uFDFD\uFE70-\uFEFC]/.test(text)) {
+            return 'ltr';
+        }
+
+        let stripped = text
+            .replace(/```[\s\S]*?```/g, ' ')
+            .replace(/`[^`\r\n]*`/g, ' ')
+            .replace(/<\/?[A-Za-z][^<>\r\n]*>/g, ' ')
+            .replace(/\$\$[\s\S]*?\$\$/g, ' ')
+            .replace(/\$[^$\r\n]+\$/g, ' ')
+            .replace(/\b(?:https?|ftp):\/\/[^\s<>{}"']+/gi, ' ')
+            .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/gi, ' ')
+            .replace(/(?<![\p{L}\p{N}_])(?:[A-Za-z]:[\\/]|\.{0,2}\/|~\/)[^\s<>()\x5B\x5D{}"'“”‘’«»]+/gu, ' ')
+            .replace(/\b(?:[A-Za-z0-9_.-]+[\\/])+[A-Za-z0-9_.-]+\b/g, ' ')
+            .replace(/@[a-zA-Z0-9_.-]+/g, ' ')
+            .replace(/\b(?:npm|pnpm|yarn|npx|git|pip|python|node|cargo|go|docker|kubectl|bun|deno|curl|wget)\s+[A-Za-z0-9_.:=@/+-]+/gi, ' ')
+            .replace(/\b[A-Za-z0-9]+(?:[-_.][A-Za-z0-9]+)+\b/g, ' ')
+            .replace(/\b[a-z]+\[[^\]\r\n]+\]/gi, ' ')
+            .replace(/\b[A-Za-z][A-Za-z0-9]*[0-9_.][A-Za-z0-9_.]*\b/g, ' ')
+            .replace(/\b[A-Za-z]*[a-z][A-Z][A-Za-z0-9]*\b/g, ' ')
+            .replace(/\b[A-Z]{2,5}\b/g, ' ');
+
+        stripped = stripped.replace(/\b[A-Za-z][A-Za-z0-9_-]*\b/g, (match) => {
+            return KNOWN_TECH_KEYWORDS.has(match.toLowerCase()) ? ' ' : match;
+        });
+
+        const rtlMatches = stripped.match(/[\u0591-\u07FF\uFB1D-\uFDFD\uFE70-\uFEFC]/g);
+        const ltrMatches = stripped.match(/[A-Za-z]/g);
+
+        const rtlCount = rtlMatches ? rtlMatches.length : 0;
+        const ltrCount = ltrMatches ? ltrMatches.length : 0;
+        const totalCount = rtlCount + ltrCount;
+
+        if (totalCount === 0) {
+            const rawFirst = text.match(/[A-Za-z\u0591-\u07FF\uFB1D-\uFDFD\uFE70-\uFEFC]/);
+            if (rawFirst) {
+                return /[\u0591-\u07FF\uFB1D-\uFDFD\uFE70-\uFEFC]/.test(rawFirst[0]) ? 'rtl' : 'ltr';
+            }
+            return 'auto';
+        }
+
+        if (rtlCount > 0 && rtlCount >= ltrCount) {
+            return 'rtl';
+        }
+
+        if (rtlCount > 0) {
+            if (PERSIAN_MARKERS.test(stripped) || /[\u0591-\u07FF\uFB1D-\uFDFD\uFE70-\uFEFC][.,!?،؛؟\s]*$/.test(stripped.trim())) {
+                const rtlRatio = rtlCount / totalCount;
+                if (rtlRatio >= 0.15) {
+                    return 'rtl';
+                }
+            }
+        }
+
+        if (ltrCount > 0 && ltrCount > rtlCount) {
+            return 'ltr';
+        }
+
+        return rtlCount > 0 ? 'rtl' : 'ltr';
+    }
+
+    // Helper: Extract text for direction calculation, isolating code snippets, pre, kbd and mention pills
+    function getTextForDirection(el) {
+        if (!el) return '';
+        if (typeof el === 'string') return el;
+        if (el.tagName === 'TEXTAREA') return el.value || '';
+        if (el.tagName === 'PRE' || el.tagName === 'CODE') return el.textContent || '';
+        if (!el.cloneNode) return el.textContent || '';
+        try {
+            const clone = el.cloneNode(true);
+            const codeNodes = clone.querySelectorAll('pre, code, kbd, samp, var, svg, script, style, .context-scope-mention, [data-bidilens-code]');
+            for (let i = 0; i < codeNodes.length; i++) {
+                codeNodes[i].remove();
+            }
+            const strippedText = (clone.textContent || '').trim();
+            return strippedText.length > 0 ? strippedText : (el.textContent || '');
+        } catch (e) {
+            return el.textContent || '';
+        }
+    }
+
     // 4. Direction Updater Function (Scoped to Chat)
     function updateDir() {
         if (!isRTL) return;
 
-        const isChatWebview = !document.querySelector('.monaco-workbench');
+        const isChatWebview = !isWorkbenchWindow();
 
         const inputSelectors = [
             '[data-testid="conversation-view"] [contenteditable="true"] p',
+            '[data-testid="conversation-view"] [contenteditable="true"] div',
             '[data-testid="conversation-view"] [contenteditable="true"]',
             '[data-testid="conversation-view"] textarea',
             '.antigravity-agent-side-panel [contenteditable="true"] p',
+            '.antigravity-agent-side-panel [contenteditable="true"] div',
             '.antigravity-agent-side-panel [contenteditable="true"]',
             '.antigravity-agent-side-panel textarea',
             '.part.auxiliarybar [contenteditable="true"] p',
+            '.part.auxiliarybar [contenteditable="true"] div',
             '.part.auxiliarybar [contenteditable="true"]',
             '.part.auxiliarybar textarea',
             '.interactive-input-part [contenteditable="true"]',
-            '.interactive-input-part textarea'
+            '.interactive-input-part textarea',
+            '#root [contenteditable="true"] p',
+            '#root [contenteditable="true"] div',
+            '#root [contenteditable="true"]',
+            '#root textarea',
+            '[contenteditable="true"] p',
+            '[contenteditable="true"] div',
+            '[contenteditable="true"]',
+            'textarea',
+            'textarea[data-testid="ask-question-writein"]'
         ];
-        if (isChatWebview) {
-            inputSelectors.push('#root [contenteditable="true"] p', '#root [contenteditable="true"]', '#root textarea');
-        }
 
         const inputs = document.querySelectorAll(inputSelectors.join(',\n'));
         inputs.forEach(el => {
             if (el.closest('.monaco-editor, .part.sidebar, .part.editor, .part.panel:not(.part.auxiliarybar)')) return;
-            const raw = el.tagName === 'TEXTAREA' ? el.value : el.textContent;
+            const raw = getTextForDirection(el);
             const text = (raw || '').replace(/[\u200B-\u200F\uFEFF]/g, '').trim();
             if (forceRTL) {
                 if (el.getAttribute('dir') !== 'rtl') el.setAttribute('dir', 'rtl');
+                if (el.matches('[contenteditable="true"]')) {
+                    el.querySelectorAll('p, div[data-lexical-text]').forEach(child => {
+                        if (child.getAttribute('dir') !== 'rtl') child.setAttribute('dir', 'rtl');
+                    });
+                }
             } else if (text.length > 0) {
-                const isRtlText = /^[^a-zA-Z]*[\u0591-\u07FF\uFB1D-\uFDFD\uFE70-\uFEFC]/.test(text);
-                const newDir = isRtlText ? 'rtl' : 'ltr';
+                const detected = detectSmartDirection(text);
+                const newDir = detected === 'rtl' ? 'rtl' : 'ltr';
                 if (el.getAttribute('dir') !== newDir) el.setAttribute('dir', newDir);
+                if (el.matches('[contenteditable="true"]')) {
+                    el.querySelectorAll('p, div[data-lexical-text]').forEach(child => {
+                        if (child.getAttribute('dir') !== newDir) child.setAttribute('dir', newDir);
+                    });
+                }
             } else {
                 if (el.hasAttribute('dir')) el.removeAttribute('dir');
+                if (el.matches('[contenteditable="true"]')) {
+                    el.querySelectorAll('p, div[data-lexical-text]').forEach(child => {
+                        if (child.hasAttribute('dir')) child.removeAttribute('dir');
+                    });
+                }
+            }
+            if (el.querySelectorAll) {
+                el.querySelectorAll('.context-scope-mention, .inline-pill, [data-lexical-beautiful-mention], [data-beautiful-mention], [data-quotable-inline="true"]').forEach(pill => {
+                    if (pill.getAttribute('dir') !== 'ltr') pill.setAttribute('dir', 'ltr');
+                });
             }
         });
 
@@ -1186,47 +1534,76 @@
             '[data-testid="conversation-view"] [data-testid="user-input-step"]',
             '[data-testid="conversation-view"] [data-testid="user-input-step"] > *',
             '[data-testid="conversation-view"] div:has(> [role="radiogroup"])',
+            '[data-testid="conversation-view"] [data-testid="thinking-step"]',
+            '[data-testid="conversation-view"] [data-testid="thought-container"] *',
+            '[data-testid="conversation-view"] [data-testid="tool-use-step"]',
+            '[data-testid="conversation-view"] [data-testid="tool-call-summary"]',
+            '[data-testid="conversation-view"] [data-testid="artifact-card"]',
+            '[data-testid="conversation-view"] [data-testid="artifact-header"]',
             '.antigravity-agent-side-panel p',
             '.antigravity-agent-side-panel li',
             '.antigravity-agent-side-panel h1, .antigravity-agent-side-panel h2, .antigravity-agent-side-panel h3',
             '.antigravity-agent-side-panel blockquote',
             '.antigravity-agent-side-panel label',
             '.antigravity-agent-side-panel .prose > *',
-            '.antigravity-agent-side-panel [data-testid="chat-message"] > *,',
+            '.antigravity-agent-side-panel [data-testid="chat-message"] > *',
             '.antigravity-agent-side-panel [data-testid="user-input-step"]',
             '.antigravity-agent-side-panel [data-testid="user-input-step"] > *',
+            '.antigravity-agent-side-panel [data-testid="thinking-step"]',
+            '.antigravity-agent-side-panel [data-testid="tool-use-step"]',
             '.part.auxiliarybar [data-testid="conversation-view"] p',
-            '.part.auxiliarybar [data-testid="conversation-view"] li'
+            '.part.auxiliarybar [data-testid="conversation-view"] li',
+            // Web chat and webview universal selectors:
+            '#root [data-testid="user-message-content"]',
+            '#root [data-testid="user-message-content"] p',
+            '#root [data-testid="user-message-content"] span',
+            '#root [data-testid="user-message-bubble"]',
+            '#root [data-testid="user-input-step"]',
+            '#root [data-testid="user-input-step"] *',
+            '#root .agy-user-bubble',
+            '#root [data-turn-content] p',
+            '#root [data-turn-content] li',
+            '#root [data-turn-content] blockquote',
+            '#root [data-turn-content] h1, #root [data-turn-content] h2, #root [data-turn-content] h3',
+            '#root [data-turn-content] div.line-content',
+            '#root [data-testid="thinking-step"]',
+            '#root [data-testid="thinking-step"] *',
+            '#root [data-testid="tool-use-step"]',
+            '#root [data-testid="tool-call-summary"]',
+            '#root [data-testid="artifact-card"]',
+            '#root [data-testid="artifact-header"]',
+            '#root [data-testid="artifact-title"]',
+            '#root p',
+            '#root li',
+            '#root h1, #root h2, #root h3, #root h4, #root h5, #root h6',
+            '#root blockquote',
+            '#root table th',
+            '#root table td',
+            '[data-testid="user-message-content"]',
+            '[data-testid="user-message-bubble"]',
+            '[data-testid="user-input-step"]',
+            '[data-testid="thinking-step"]',
+            '[data-testid="tool-use-step"]',
+            '[data-testid="tool-call-summary"]',
+            '[data-testid="artifact-title"]'
         ];
-        if (isChatWebview) {
-            outputSelectors.push(
-                '#root [data-testid="conversation-view"] p',
-                '#root [data-testid="conversation-view"] li',
-                '#root .prose p',
-                '#root .prose li',
-                '#root [data-testid="chat-message"] p',
-                '#root [data-testid="chat-message"] li',
-                '#root [data-testid="user-input-step"] div'
-            );
-        }
 
         const chatOutputs = document.querySelectorAll(outputSelectors.join(',\n'));
         chatOutputs.forEach(el => {
             if (el.tagName === 'PRE' || el.tagName === 'CODE') return;
-            if (el.closest('pre, code, .cursor-edit.text-secondary-foreground, [class*="font-mono"], .rtl-widget-panel-portal')) return;
+            if (el.closest('pre, code, [class*="font-mono"], .rtl-widget-panel-portal')) return;
             if (el.closest('.monaco-editor, .part.sidebar, .part.editor, .part.panel:not(.part.auxiliarybar)')) return;
+            if (el.closest('.terminal, .xterm')) return;
 
-            const text = (el.textContent || '').replace(/[\u200B-\u200F\uFEFF]/g, '').trim();
+            const raw = getTextForDirection(el);
+            const text = (raw || '').replace(/[\u200B-\u200F\uFEFF]/g, '').trim();
             let dir = 'auto';
 
             if (forceRTL) {
                 dir = 'rtl';
             } else if (text) {
-                const firstChar = text.match(/[A-Za-z\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/);
-                if (firstChar) {
-                    const isPersianOrArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(firstChar[0]);
-                    dir = isPersianOrArabic ? 'rtl' : 'ltr';
-                }
+                const detected = detectSmartDirection(text);
+                if (detected) dir = detected;
             }
 
             if (el.getAttribute('dir') !== dir) {
@@ -1234,12 +1611,22 @@
             }
         });
     }
-    document.body.addEventListener('input', updateDir, { capture: true });
-    document.body.addEventListener('focusin', updateDir, { capture: true });
+    let updateDirTimer = null;
+    function scheduleUpdateDir() {
+        if (!isRTL) return;
+        if (updateDirTimer) return;
+        updateDirTimer = setTimeout(() => {
+            updateDirTimer = null;
+            updateDir();
+        }, 300);
+    }
+    document.body.addEventListener('input', scheduleUpdateDir, { capture: true });
+    document.body.addEventListener('focusin', scheduleUpdateDir, { capture: true });
+    document.body.addEventListener('keyup', scheduleUpdateDir, { capture: true });
     
-    // Keyboard Shortcuts: Alt + R
+    // Keyboard Shortcuts: Alt + R (Option + R on Mac)
     document.addEventListener('keydown', (e) => {
-        if (e.altKey && e.code === 'KeyR') {
+        if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyR') {
             e.preventDefault();
             setRTLActive(!isRTL);
         }
@@ -1415,7 +1802,7 @@
                 <svg height="14" width="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"></path></svg>
                 Star on GitHub
               </a>
-              <span class="rtl-version-badge">v1.1.7</span>
+              <span class="rtl-version-badge">v${rtlVersion}</span>
             </div>
     `);
 
@@ -1431,7 +1818,7 @@
 
     function isInsideExplorerOrPrimarySidebar(el) {
         if (!el) return false;
-        // Strictly protect and ignore the primary sidebar (file tree/explorer), activity bar, and status bar
+        // Strictly protect and ignore the primary sidebar (file tree/explorer), activity bar, status bar, and web conversations sidebar
         return el.closest('.part.sidebar') !== null ||
                el.closest('[id*="workbench.parts.sidebar"]') !== null ||
                el.closest('.explorer-viewlet') !== null ||
@@ -1439,7 +1826,20 @@
                el.closest('.part.activitybar') !== null ||
                el.closest('[id*="workbench.parts.activitybar"]') !== null ||
                el.closest('.part.statusbar') !== null ||
-               el.closest('[id*="workbench.parts.statusbar"]') !== null;
+               el.closest('[id*="workbench.parts.statusbar"]') !== null ||
+               el.closest('[role="navigation"]') !== null ||
+               el.closest('[aria-label="Sidebar"]') !== null ||
+               el.closest('aside') !== null;
+    }
+
+    function getOpenIdeButton() {
+        const btn = document.querySelector('[data-testid="open-ide"]')
+            || document.querySelector('[data-testid="open-editor"]')
+            || document.querySelector('[data-testid="open-editor-single"]')
+            || document.querySelector('[data-testid="open-editor-multi"]')
+            || document.querySelector('[data-testid="open-editor-empty"]')
+            || document.querySelector('[data-testid="install-editor"]');
+        return (btn && !isInsideExplorerOrPrimarySidebar(btn)) ? btn : null;
     }
 
     function isMoreButton(node) {
@@ -1533,52 +1933,62 @@
     }
 
     function findChatHeaderTarget() {
-        // Priority 1 (DIRECT): The official titlebar-more-actions button in Antigravity IDE
-        const directMore = document.querySelector('[data-testid="titlebar-more-actions"]');
-        const directPlus = document.querySelector('[data-testid="extension-new-conversation"]');
+        const openIdeBtn = getOpenIdeButton();
+        const rawMore = document.querySelector('[data-testid="titlebar-more-actions"]');
+        const directMore = (rawMore && !isInsideExplorerOrPrimarySidebar(rawMore)) ? rawMore : null;
+        const rawPlus = document.querySelector('[data-testid="extension-new-conversation"]');
+        const directPlus = (rawPlus && !isInsideExplorerOrPrimarySidebar(rawPlus)) ? rawPlus : null;
 
-        if (directMore && !isInsideExplorerOrPrimarySidebar(directMore)) {
-            const cluster = directMore.parentElement;
-            if (cluster && cluster.tagName === 'DIV' && !isInsideExplorerOrPrimarySidebar(cluster)) {
-                return {
-                    cluster,
-                    moreItem: directMore,
-                    plusItem: (directPlus && directPlus.parentElement === cluster) ? directPlus : null,
-                    isChatHeader: true
-                };
-            }
-        }
-
-        // Priority 2 (DIRECT): The extension-new-conversation button
-        if (directPlus && !isInsideExplorerOrPrimarySidebar(directPlus)) {
-            const cluster = directPlus.parentElement;
-            if (cluster && cluster.tagName === 'DIV' && !isInsideExplorerOrPrimarySidebar(cluster)) {
-                return {
-                    cluster,
-                    moreItem: (directMore && directMore.parentElement === cluster) ? directMore : null,
-                    plusItem: directPlus,
-                    isChatHeader: true
-                };
-            }
-        }
-
-        // Priority 3 (DIRECT): The pane-titlebar-toolbar container
+        // Priority 1 (PRIMARY): The official pane-titlebar-toolbar container (works on Home screen, Chat view, and IDE side-panel)
         const paneToolbar = document.querySelector('[data-testid="pane-titlebar-toolbar"]');
         if (paneToolbar && !isInsideExplorerOrPrimarySidebar(paneToolbar)) {
             const cluster = paneToolbar.querySelector('.flex.items-center.gap-1') ||
                             paneToolbar.querySelector('.flex.items-center') ||
                             paneToolbar.firstElementChild;
             if (cluster && cluster.tagName === 'DIV' && !isInsideExplorerOrPrimarySidebar(cluster)) {
-                const moreBtn = cluster.querySelector('[data-testid="titlebar-more-actions"]');
-                const plusBtn = cluster.querySelector('[data-testid="extension-new-conversation"]');
-                if (moreBtn || plusBtn) {
-                    return {
-                        cluster,
-                        moreItem: moreBtn || null,
-                        plusItem: plusBtn || null,
-                        isChatHeader: true
-                    };
-                }
+                const openIdeItem = openIdeBtn ? findDirectChild(cluster, openIdeBtn) : null;
+                const moreBtn = cluster.querySelector('[data-testid="titlebar-more-actions"]') || directMore;
+                const moreItem = moreBtn ? findDirectChild(cluster, moreBtn) : null;
+                const plusBtn = cluster.querySelector('[data-testid="extension-new-conversation"]') || directPlus;
+                const plusItem = plusBtn ? findDirectChild(cluster, plusBtn) : null;
+                return {
+                    cluster,
+                    openIdeItem,
+                    openIdeBtn,
+                    moreItem,
+                    plusItem,
+                    isChatHeader: true
+                };
+            }
+        }
+
+        // Priority 2: Direct Open IDE button or titlebar-more-actions button parent cluster
+        if (openIdeBtn || directMore) {
+            const cluster = (directMore && directMore.parentElement) || (openIdeBtn && openIdeBtn.parentElement);
+            if (cluster && cluster.tagName === 'DIV' && !isInsideExplorerOrPrimarySidebar(cluster)) {
+                return {
+                    cluster,
+                    openIdeItem: openIdeBtn ? findDirectChild(cluster, openIdeBtn) : null,
+                    openIdeBtn,
+                    moreItem: directMore ? findDirectChild(cluster, directMore) : null,
+                    plusItem: directPlus ? findDirectChild(cluster, directPlus) : null,
+                    isChatHeader: true
+                };
+            }
+        }
+
+        // Priority 3: The extension-new-conversation button
+        if (directPlus) {
+            const cluster = directPlus.parentElement;
+            if (cluster && cluster.tagName === 'DIV' && !isInsideExplorerOrPrimarySidebar(cluster)) {
+                return {
+                    cluster,
+                    openIdeItem: null,
+                    openIdeBtn: null,
+                    moreItem: (directMore && directMore.parentElement === cluster) ? directMore : null,
+                    plusItem: directPlus,
+                    isChatHeader: true
+                };
             }
         }
 
@@ -1596,6 +2006,8 @@
                         if (moreBtn || plusBtn) {
                             return {
                                 cluster,
+                                openIdeItem: openIdeBtn ? findDirectChild(cluster, openIdeBtn) : null,
+                                openIdeBtn,
                                 moreItem: moreBtn ? findDirectChild(cluster, moreBtn) : null,
                                 plusItem: plusBtn ? findDirectChild(cluster, plusBtn) : null,
                                 isChatHeader: true
@@ -1609,7 +2021,7 @@
         return null;
     }
 
-    function syncButtonWithChatHeader(refBtn) {
+    function syncButtonWithChatHeader(refBtn, isOpenIde) {
         const btn = widgetWrapper ? widgetWrapper.querySelector('#rtl-topbar-btn') : null;
         if (!btn || !refBtn) return;
         try {
@@ -1617,6 +2029,16 @@
             const h = parseFloat(cs.height);
             if (h >= 18 && h <= 36 && btn.style.height !== cs.height) {
                 btn.style.setProperty('height', cs.height, 'important');
+            }
+            if (isOpenIde) {
+                const pl = parseFloat(cs.paddingLeft);
+                const pr = parseFloat(cs.paddingRight);
+                if (pl > 0) btn.style.setProperty('padding-left', cs.paddingLeft, 'important');
+                if (pr > 0) btn.style.setProperty('padding-right', cs.paddingRight, 'important');
+                if (cs.fontSize) btn.style.setProperty('font-size', cs.fontSize, 'important');
+                if (cs.fontFamily) btn.style.setProperty('font-family', cs.fontFamily, 'important');
+                if (cs.fontWeight) btn.style.setProperty('font-weight', cs.fontWeight, 'important');
+                if (cs.lineHeight) btn.style.setProperty('line-height', cs.lineHeight, 'important');
             }
             if (cs.borderRadius && btn.style.borderRadius !== cs.borderRadius) {
                 btn.style.setProperty('border-radius', cs.borderRadius, 'important');
@@ -1631,38 +2053,72 @@
             if (el && el.parentNode) el.parentNode.removeChild(el);
         });
 
-        if (!document.getElementById('rtl-widget-panel-portal')) {
-            document.body.appendChild(panel);
+        if (isWorkbenchWindow()) {
+            // Strictly safeguard: the host IDE workbench window must NEVER host the topbar button or settings panel
+            const strayWrapper = document.getElementById('rtl-topbar-wrapper');
+            if (strayWrapper && strayWrapper.parentNode) strayWrapper.parentNode.removeChild(strayWrapper);
+            const strayPanel = document.getElementById('rtl-widget-panel-portal');
+            if (strayPanel && strayPanel.parentNode) strayPanel.parentNode.removeChild(strayPanel);
+            return;
+        }
+
+        if (isRTL && !document.getElementById('rz-antigravity-rtl-style') && document.head) {
+            document.head.appendChild(rtlStyle);
         }
 
         const target = findChatHeaderTarget();
-        if (!target || !target.cluster) return;
+        if (!target || !target.cluster) {
+            // In IDE, the button belongs strictly inside the chat header. Never float on body!
+            if (widgetWrapper && widgetWrapper.parentNode && widgetWrapper.parentNode === document.body) {
+                widgetWrapper.parentNode.removeChild(widgetWrapper);
+            }
+            return;
+        }
 
-        const { cluster, moreItem, plusItem } = target;
+        if (!document.getElementById('rtl-widget-panel-portal')) {
+            document.body.appendChild(panel);
+        }
+        widgetWrapper.classList.remove('rtl-topbar-floating');
+
+        const { cluster, openIdeItem, openIdeBtn, moreItem, plusItem } = target;
 
         // Strictly safeguard: cluster must be a container DIV or UL, NEVER a button or span
         if (cluster.tagName !== 'DIV' && cluster.tagName !== 'UL') return;
 
-        // Positioning rule: strictly BETWEEN the + button (plusItem) and three dots (moreItem)
-        if (moreItem && moreItem.parentElement === cluster) {
-            // Placing BEFORE moreItem puts widgetWrapper right after plusItem and before moreItem
+        if (openIdeItem && openIdeItem.parentElement === cluster) {
+            // Full Web / Desktop App layout with Open IDE button:
+            // Place directly between 3-dots and Open IDE (immediately before Open IDE wrapper)
+            if (widgetWrapper.nextElementSibling !== openIdeItem || widgetWrapper.parentElement !== cluster) {
+                cluster.insertBefore(widgetWrapper, openIdeItem);
+            }
+        } else if (moreItem && moreItem.parentElement === cluster && plusItem && plusItem.parentElement === cluster) {
+            // IDE Compact Side-Panel layout (both + and ... in the same toolbar, no Open IDE):
+            // Place strictly BETWEEN + (plusItem) and ... (moreItem)
             if (widgetWrapper.nextElementSibling !== moreItem || widgetWrapper.parentElement !== cluster) {
                 cluster.insertBefore(widgetWrapper, moreItem);
             }
+        } else if (moreItem && moreItem.parentElement === cluster) {
+            // Web / App layout where 3-dots (...) is present without Open IDE:
+            // Place immediately after 3-dots (...)
+            if (moreItem.nextElementSibling !== widgetWrapper || widgetWrapper.parentElement !== cluster) {
+                cluster.insertBefore(widgetWrapper, moreItem.nextSibling);
+            }
         } else if (plusItem && plusItem.parentElement === cluster) {
-            // If moreItem is not present, place immediately after plusItem
             if (plusItem.nextElementSibling !== widgetWrapper || widgetWrapper.parentElement !== cluster) {
                 cluster.insertBefore(widgetWrapper, plusItem.nextSibling);
             }
         } else if (cluster) {
-            if (!cluster.contains(widgetWrapper)) {
+            // Home screen (before opening a chat): place at the start of the topbar cluster (before layout toggles)
+            if (cluster.firstElementChild && cluster.firstElementChild !== widgetWrapper) {
+                cluster.insertBefore(widgetWrapper, cluster.firstElementChild);
+            } else if (!cluster.contains(widgetWrapper)) {
                 cluster.appendChild(widgetWrapper);
             }
         }
 
-        const refBtn = moreItem || plusItem;
+        const refBtn = openIdeBtn || moreItem || plusItem;
         if (refBtn) {
-            syncButtonWithChatHeader(refBtn);
+            syncButtonWithChatHeader(refBtn, Boolean(openIdeBtn && refBtn === openIdeBtn));
         }
     }
 
@@ -1845,7 +2301,120 @@
             localStorage.setItem('rz-antigravity-rtl-config', JSON.stringify(cfg));
         } catch (e) {}
         console.log("SAVE_RTL_CONFIG|" + JSON.stringify(cfg));
+        if (typeof fetch === 'function') {
+            fetch((altOrigin || '') + '/rz-api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(cfg)
+            }).catch(() => {});
+        }
     };
+
+    function applyLoadedConfig(cfg) {
+        if (!cfg || typeof cfg !== 'object') return;
+        if (cfg.faFont !== undefined) rtlConfig.faFont = normalizeFont(cfg.faFont);
+        if (cfg.enFont !== undefined) rtlConfig.enFont = normalizeFont(cfg.enFont);
+        if (cfg.codeFont !== undefined) rtlConfig.codeFont = normalizeFont(cfg.codeFont);
+        if (cfg.lh !== undefined) rtlConfig.lh = cfg.lh;
+        if (cfg.fs !== undefined) rtlConfig.fs = cfg.fs;
+        if (cfg.isRTL !== undefined) isRTL = Boolean(cfg.isRTL);
+        if (cfg.forceRTL !== undefined) forceRTL = Boolean(cfg.forceRTL);
+
+        try {
+            localStorage.setItem('rz-antigravity-rtl-config', JSON.stringify({
+                faFont: rtlConfig.faFont,
+                enFont: rtlConfig.enFont,
+                codeFont: rtlConfig.codeFont,
+                lh: rtlConfig.lh,
+                fs: rtlConfig.fs,
+                isRTL: isRTL,
+                forceRTL: forceRTL
+            }));
+        } catch(e) {}
+
+        if (faDropdown) faDropdown.setValue(rtlConfig.faFont);
+        if (enDropdown) enDropdown.setValue(rtlConfig.enFont);
+        if (codeDropdown) codeDropdown.setValue(rtlConfig.codeFont);
+        if (lhInput) {
+            lhInput.value = rtlConfig.lh;
+            if (lhVal) {
+                const textSpan = lhVal.querySelector('.rtl-val-text');
+                if (textSpan) textSpan.textContent = rtlConfig.lh;
+            }
+        }
+        if (fsInput) {
+            fsInput.value = rtlConfig.fs;
+            if (fsVal) {
+                const textSpan = fsVal.querySelector('.rtl-val-text');
+                if (textSpan) textSpan.textContent = rtlConfig.fs + 'px';
+            }
+        }
+        if (toggleBtn) {
+            toggleBtn.setAttribute('aria-checked', String(isRTL));
+            toggleBtn.classList.toggle('active', isRTL);
+            if (toggleLabel) toggleLabel.innerText = isRTL ? 'Enabled' : 'Disabled';
+        }
+        if (topbarBtn) topbarBtn.classList.toggle('active', isRTL);
+        if (forceBtn) {
+            forceBtn.setAttribute('aria-checked', String(forceRTL));
+            forceBtn.classList.toggle('active', forceRTL);
+        }
+
+        if (isRTL) {
+            if (forceRow) {
+                forceRow.style.opacity = '';
+                forceRow.style.pointerEvents = '';
+            }
+            if (settingsWrapper) {
+                settingsWrapper.style.opacity = '';
+                settingsWrapper.style.pointerEvents = '';
+            }
+            if (!rtlStyle.parentNode) document.head.appendChild(rtlStyle);
+            updateDynamicCSS(rtlConfig.faFont, rtlConfig.enFont, rtlConfig.codeFont, rtlConfig.lh, rtlConfig.fs);
+            updateDir();
+        } else {
+            if (forceRow) {
+                forceRow.style.opacity = '0.4';
+                forceRow.style.pointerEvents = 'none';
+            }
+            if (settingsWrapper) {
+                settingsWrapper.style.opacity = '0.4';
+                settingsWrapper.style.pointerEvents = 'none';
+            }
+            clearRTL();
+        }
+    }
+
+    // Sync with central config via /rz-api/config (supported when loaded through proxy)
+    if (typeof fetch === 'function') {
+        fetch((altOrigin || '') + '/rz-api/config')
+            .then(res => res.ok ? res.json() : null)
+            .then(cfg => {
+                if (cfg && typeof cfg === 'object' && Object.keys(cfg).length > 0) {
+                    const hasLocalFonts = Boolean(rtlConfig.faFont || rtlConfig.enFont || rtlConfig.codeFont);
+                    const hasServerFonts = Boolean(cfg.faFont || cfg.enFont || cfg.codeFont);
+                    if (hasLocalFonts && !hasServerFonts) {
+                        // LocalStorage has user-configured fonts while server config is empty: push local config to server
+                        saveConfig();
+                    } else {
+                        applyLoadedConfig(cfg);
+                    }
+                }
+            })
+            .catch(() => {});
+    }
+
+    // Sync across IDE windows (workbench window <-> chat webviews)
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'rz-antigravity-rtl-config' || e.key === 'smart-rtl-config') {
+            try {
+                if (e.newValue) {
+                    const parsed = sanitizeConfig(JSON.parse(e.newValue));
+                    applyLoadedConfig(parsed);
+                }
+            } catch (err) {}
+        }
+    });
 
     function clearRTL() {
         if (rtlStyle.parentNode) rtlStyle.parentNode.removeChild(rtlStyle);
@@ -1856,7 +2425,10 @@
             .agent-driven-pane [dir],
             [data-testid="chat-message"] [dir],
             .prose [dir],
-            #root [dir]
+            #root [dir],
+            [data-testid="user-message-content"][dir],
+            [data-testid="user-message-bubble"][dir],
+            [data-testid="user-input-step"][dir]
         `).forEach(el => el.removeAttribute('dir'));
         document.querySelectorAll('[dir]').forEach(el => {
             if (!el.closest('.monaco-editor') && !el.closest('.part.sidebar') && !el.closest('.part.editor') && !el.closest('.part.panel:not(.part.auxiliarybar)')) el.removeAttribute('dir');
@@ -2006,25 +2578,24 @@
         });
     });
 
-    // Observer & Periodic sync
-    let updateDirRAF = null;
-    const observer = new MutationObserver(() => {
-        attachElements();
-        if (!isRTL) return;
-        if (updateDirRAF) cancelAnimationFrame(updateDirRAF);
-        updateDirRAF = requestAnimationFrame(updateDir);
+    // Observer & Event-driven sync
+    const observer = new MutationObserver((mutations) => {
+        if (!isWorkbenchWindow()) {
+            if (!document.getElementById('rtl-topbar-wrapper') || !document.getElementById('rtl-widget-panel-portal')) {
+                attachElements();
+            }
+        }
+        const hasExternal = mutations.some(m => [...m.addedNodes].some(node => !node.id || (!node.id.startsWith('rtl-') && !node.id.startsWith('antigravity-rtl'))));
+        if (hasExternal) scheduleUpdateDir();
     });
 
     if (document.body) {
-        observer.observe(document.body, { childList: true, subtree: true });
+        observer.observe(document.body, { childList: true, subtree: true, characterData: true });
     } else {
         document.addEventListener('DOMContentLoaded', () => {
-            observer.observe(document.body, { childList: true, subtree: true });
+            observer.observe(document.body, { childList: true, subtree: true, characterData: true });
         });
     }
-
-    setInterval(attachElements, 250);
-    setInterval(updateDir, 400);
 
     function init() {
         attachElements();
