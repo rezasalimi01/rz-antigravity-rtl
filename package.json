@@ -33,6 +33,7 @@
   "files": [
     "bin",
     "README.md",
+    "README_FA.md",
     "docs"
   ],
   "dependencies": {
